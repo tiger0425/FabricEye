@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/venv/
+backend/app/__pycache__/
+backend/app/core/__pycache__/
+backend/app/models/__pycache__/
+backend/app/routers/__pycache__/
+backend/app/schemas/__pycache__/
+backend/app/services/__pycache__/
+backend/app/utils/__pycache__/
+.env
+backend/backend.log
+backend/fabriceye.db
+
+# Virtual Environment
+venv/
+ENV/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Images/Large files
+*.png
+*.jpg
+*.jpeg
+data/
+storage/
+
+# Node
+frontend/node_modules/
+frontend/.vite/
+frontend/dist/
+frontend/frontend.log

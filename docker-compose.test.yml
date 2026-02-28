@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fabric-eye-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./storage:/app/storage
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/fabric_eye.db
+      - VIDEO_STORAGE_PATH=/app/storage/videos
+      - SNAPSHOT_STORAGE_PATH=/app/storage/snapshots
+      - AI_API_KEY=${AI_API_KEY:-mock_key}
+    restart: unless-stopped
+    networks:
+      - fabric-eye-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  fabric-eye-network:
+    driver: bridge
+
+volumes:
+  storage:
+    driver: local
+  data:
+    driver: local

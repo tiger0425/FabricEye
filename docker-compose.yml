@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fabric-eye-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./storage:/app/storage
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/fabric_eye.db
+      - VIDEO_STORAGE_PATH=/app/storage/videos
+      - SNAPSHOT_STORAGE_PATH=/app/storage/snapshots
+      - AI_API_KEY=${AI_API_KEY}
+    restart: unless-stopped
+    networks:
+      - fabric-eye-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fabric-eye-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - fabric-eye-network
+
+networks:
+  fabric-eye-network:
+    driver: bridge
+
+volumes:
+  storage:
+    driver: local
+  data:
+    driver: local
