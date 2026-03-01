@@ -38,13 +38,13 @@ export default defineConfig({
     proxy: {
       // 代理 /api 请求到后端服务器
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:8001',
         changeOrigin: true
         // 注意：后端API路径就是 /api/xxx，不需要rewrite
       },
       // 代理 WebSocket 请求到后端服务器
       '/ws': {
-        target: 'ws://localhost:8000',
+        target: 'ws://localhost:8001',
         ws: true,
         changeOrigin: true
       }
