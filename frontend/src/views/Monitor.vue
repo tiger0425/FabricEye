@@ -136,6 +136,7 @@ import StatusPanel from '@/components/monitor/StatusPanel.vue'
 import CascadePanel from '@/components/monitor/CascadePanel.vue'
 import { useWebSocket } from '@/utils/websocket'
 
+import * as rollsApi from '@/api/rolls'
 const monitorStore = useMonitorStore()
 
 // 视频流URL
@@ -250,25 +251,23 @@ function stopSnapshotPolling() {
  */
 async function handleToggleStream() {
   try {
-    if (monitorStore.isInspecting) {
-      // 停止监控
-      if (monitorStore.currentVideo) {
-        await monitorStore.stopStream(monitorStore.currentVideo.id)
-      }
+    if (monitorStore.streamStatus === 'connected') {
+      // 停止验布 - 调用 rolls API
+      await rollsApi.stopInspection(currentRollId.value)
+      monitorStore.streamStatus = 'disconnected'
       // 断开 WebSocket
       wsDisconnect()
-      ElMessage.success('已停止监控')
+      ElMessage.success('已停止验布')
     } else {
-      // 开始监控
-      if (monitorStore.currentVideo) {
-        await monitorStore.startStream(monitorStore.currentVideo.id)
-      }
+      // 开始验布 - 调用 rolls API
+      await rollsApi.startInspection(currentRollId.value)
+      monitorStore.streamStatus = 'connected'
       // 连接 WebSocket
       wsConnect()
-      ElMessage.success('已开始监控')
+      ElMessage.success('已开始验布')
     }
   } catch (error) {
-    ElMessage.error('操作失败')
+    ElMessage.error('操作失败: ' + (error.message || '未知错误'))
   }
 }
 
