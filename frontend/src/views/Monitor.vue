@@ -42,6 +42,13 @@
           </div>
         </el-card>
 
+        <!-- 级联检测状态面板 -->
+        <CascadePanel
+          :roll-id="currentRollId"
+          :ws-message="lastMessage"
+          :ws-status="wsStatus"
+        />
+
         <!-- AI状态面板 -->
         <el-card class="status-card">
           <template #header>
@@ -120,20 +127,39 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useMonitorStore } from '@/stores'
 import { ElMessage } from 'element-plus'
 import VideoPlayer from '@/components/monitor/VideoPlayer.vue'
 import DefectList from '@/components/monitor/DefectList.vue'
 import StatusPanel from '@/components/monitor/StatusPanel.vue'
+import CascadePanel from '@/components/monitor/CascadePanel.vue'
+import { useWebSocket } from '@/utils/websocket'
 
 const monitorStore = useMonitorStore()
 
 // 视频流URL
 const streamUrl = ref('')
 
+// 当前布卷 ID（用于级联检测）
+const currentRollId = ref(1)
+
 // 定时器
 let statsTimer = null
+
+// ==================== WebSocket ====================
+// 构建 WebSocket URL，通过 Vite 代理 /ws -> ws://localhost:8000
+const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/monitor/${currentRollId.value}`
+const { status: wsStatus, lastMessage, connect: wsConnect, disconnect: wsDisconnect } = useWebSocket(wsUrl)
+
+// 监听 WebSocket 消息，处理实时缺陷推送
+watch(lastMessage, (msg) => {
+  if (!msg) return
+  if (msg.type === 'defect_confirmed') {
+    monitorStore.addRealTimeDefect(msg)
+  }
+})
+
 
 /**
  * 组件挂载时初始化
@@ -229,12 +255,16 @@ async function handleToggleStream() {
       if (monitorStore.currentVideo) {
         await monitorStore.stopStream(monitorStore.currentVideo.id)
       }
+      // 断开 WebSocket
+      wsDisconnect()
       ElMessage.success('已停止监控')
     } else {
       // 开始监控
       if (monitorStore.currentVideo) {
         await monitorStore.startStream(monitorStore.currentVideo.id)
       }
+      // 连接 WebSocket
+      wsConnect()
       ElMessage.success('已开始监控')
     }
   } catch (error) {

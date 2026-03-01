@@ -64,18 +64,32 @@ def generate_demo_frame(width=640, height=480, frame_num=0):
     img_bytes.seek(0)
     return img_bytes.getvalue()
 
+from app.services.video_capture import VideoCaptureService
+import cv2
+
+video_service = VideoCaptureService()
+
 async def video_stream_generator(video_id: int):
-    """MJPEG流生成器"""
-    frame_num = 0
+    """MJPEG流生成器 - 优先使用真实摄像头"""
     try:
+        # 尝试启动摄像头
+        video_service.start_capture()
+        
         while True:
             if video_id not in active_streams or not active_streams[video_id]:
                 break
                 
-            # 生成帧
-            frame = generate_demo_frame(frame_num=frame_num)
-            frame_num += 1
+            # 获取真实帧
+            frame_arr = video_service.get_frame()
             
+            if frame_arr is not None:
+                # 编码为 JPEG
+                _, jpeg = cv2.imencode('.jpg', frame_arr)
+                frame = jpeg.tobytes()
+            else:
+                # 回退到演示帧
+                frame = generate_demo_frame()
+                
             # MJPEG格式: JPEG帧 + 分隔符
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
@@ -87,7 +101,8 @@ async def video_stream_generator(video_id: int):
     finally:
         if video_id in active_streams:
             active_streams[video_id] = False
-
+        # 注意：这里我们不停止 capture，因为可能还有其他流在使用，或者 streaming engine 在使用
+        # video_service.stop_capture()
 # 根路由
 @router.get("/")
 async def read_videos(

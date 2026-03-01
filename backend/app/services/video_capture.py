@@ -1,5 +1,6 @@
 import cv2
 import logging
+import threading
 from typing import Optional, Protocol
 import numpy as np
 from abc import ABC, abstractmethod
@@ -111,71 +112,43 @@ class CameraFactory:
                 width=settings.CAMERA_WIDTH,
                 height=settings.CAMERA_HEIGHT
             )
-        # TODO: 后续增加 MVS 相机支持
-        # elif cam_type == "mvs":
-        #     return MVSCamera(...)
         else:
             logger.warning(f"Unknown camera type: {cam_type}. Falling back to MockCamera.")
             return MockCamera()
 
 class VideoCaptureService:
     """
-    视频采集服务类
+    视频采集服务类 (单例模式)
     封装相机底层实现，提供高层接口。
     """
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super(VideoCaptureService, cls).__new__(cls)
+                cls._instance._initialized = False
+        return cls._instance
+
     def __init__(self):
+        if getattr(self, '_initialized', False):
+            return
         self.camera: BaseCamera = CameraFactory.create_camera()
+        self._initialized = True
+        self._is_capturing = False
 
     def start_capture(self) -> bool:
-        return self.camera.open()
+        if self._is_capturing:
+            return True
+        success = self.camera.open()
+        if success:
+            self._is_capturing = True
+        return success
 
     def stop_capture(self) -> None:
         self.camera.close()
+        self._is_capturing = False
 
     def get_frame(self) -> Optional[np.ndarray]:
-        frame = self.camera.get_frame()
-        if frame is None:
-            # 如果配置不是 mock 却没拿到帧，可以考虑自动回退到 mock 或重试
-            return None
-        return frame
-
-import logging
-from typing import Optional
-import numpy as np
-
-logger = logging.getLogger(__name__)
-
-class VideoCaptureService:
-    """
-    视频采集服务类
-    封装 OpenCV 的视频捕获功能。
-    """
-    def __init__(self, device_id: int = 0):
-        self.device_id = device_id
-        self.cap: Optional[cv2.VideoCapture] = None
-
-    def start_capture(self) -> bool:
-        try:
-            self.cap = cv2.VideoCapture(self.device_id)
-            if not self.cap.isOpened():
-                logger.warning(f"Cannot open camera {self.device_id}. Entering Mock mode.")
-                return True
-            logger.info(f"Camera {self.device_id} started.")
-            return True
-        except Exception as e:
-            logger.error(f"Error starting capture: {e}")
-            return False
-
-    def stop_capture(self) -> None:
-        if self.cap:
-            self.cap.release()
-            self.cap = None
-            logger.info("Camera stopped.")
-
-    def get_frame(self) -> Optional[np.ndarray]:
-        if self.cap and self.cap.isOpened():
-            ret, frame = self.cap.read()
-            if ret:
-                return frame
-        # Mock mode: return random noise
-        return np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+        return self.camera.get_frame()
