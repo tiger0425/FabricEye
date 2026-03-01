@@ -94,7 +94,8 @@ async def video_stream_generator(video_id: int):
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
             
-            # 控制帧率 (~15 FPS)
+            # 控制帧率 (~5 FPS)
+            await asyncio.sleep(0.2)
             await asyncio.sleep(0.067)
     except asyncio.CancelledError:
         pass
@@ -153,7 +154,22 @@ async def get_video_snapshot(
     db: AsyncSession = Depends(get_db),
     accept: str = Header(None)
 ):
-    frame = generate_demo_frame()
+    # 尝试获取真实帧
+    video_service.start_capture()
+    frame_arr = video_service.get_frame()
+    
+    if frame_arr is not None:
+        _, jpeg = cv2.imencode('.jpg', frame_arr)
+        frame = jpeg.tobytes()
+    else:
+        frame = generate_demo_frame()
+    
+    # 如果请求直接要图片（Accept: image/jpeg），返回原始图片
+    if accept and ('image/jpeg' in accept or 'image/*' in accept):
+        return StreamingResponse(
+            io.BytesIO(frame),
+            media_type='image/jpeg'
+        )
     
     # 如果请求直接要图片（Accept: image/jpeg），返回原始图片
     if accept and 'image/jpeg' in accept:

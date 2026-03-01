@@ -137,6 +137,7 @@ import CascadePanel from '@/components/monitor/CascadePanel.vue'
 import { useWebSocket } from '@/utils/websocket'
 
 import * as rollsApi from '@/api/rolls'
+import * as defectsApi from '@/api/defects'
 const monitorStore = useMonitorStore()
 
 // 视频流URL
@@ -149,8 +150,8 @@ const currentRollId = ref(1)
 let statsTimer = null
 
 // ==================== WebSocket ====================
-// 构建 WebSocket URL，通过 Vite 代理 /ws -> ws://localhost:8000
-const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/monitor/${currentRollId.value}`
+// 构建 WebSocket URL，通过 Vite 代理 /ws -> ws://localhost:8001
+const wsUrl = `/ws/monitor/${currentRollId.value}`
 const { status: wsStatus, lastMessage, connect: wsConnect, disconnect: wsDisconnect } = useWebSocket(wsUrl)
 
 // 监听 WebSocket 消息，处理实时缺陷推送
@@ -181,6 +182,26 @@ onUnmounted(() => {
 /**
  * 初始化数据
  */
+/**
+ * 加载历史缺陷数据
+ */
+async function loadHistoricalDefects() {
+  try {
+    const res = await defectsApi.getDefectList({ pageSize: 50 })
+ if (res?.list) {
+ const defects = res.list.map(d => ({
+        ...d,
+        imageUrl: `/api/defects/image/${d.id}`
+      }))
+ monitorStore.defectList = defects
+      console.log('Loaded historical defects:', defects.length)
+    }
+  } catch (error) {
+    console.error('加载历史缺陷失败:', error)
+  }
+}
+
+
 // Debug: set a global to track
 window.initDataCalled = false
 
@@ -197,6 +218,19 @@ async function initData() {
     
     // 获取缺陷统计
     await monitorStore.fetchDefectStats()
+
+    // 获取布卷详情，同步验布状态
+    const rollDetail = await rollsApi.getRollDetail(currentRollId.value)
+    if (rollDetail && rollDetail.status === 'inspecting') {
+      monitorStore.streamStatus = 'connected'
+      wsConnect()
+      console.log('Detected existing inspection, updated streamStatus to connected')
+    }
+
+    await monitorStore.fetchDefectStats()
+
+ // 加载历史缺陷数据
+ await loadHistoricalDefects()
   } catch (error) {
     console.error('初始化数据失败:', error)
   }
@@ -267,9 +301,18 @@ async function handleToggleStream() {
       ElMessage.success('已开始验布')
     }
   } catch (error) {
-    ElMessage.error('操作失败: ' + (error.message || '未知错误'))
+    console.error('操作失败详情:', error)
+    // 如果提示已经在验布中，说明状态不一致，尝试同步状态
+    if (error.message && error.message.includes('已在验布中')) {
+      monitorStore.streamStatus = 'connected'
+      wsConnect()
+      ElMessage.info('检测到已在验布中，已自动同步状态')
+    } else {
+      ElMessage.error('操作失败: ' + (error.message || '未知错误'))
+    }
   }
 }
+
 
 /**
  * 获取视频流状态类型
@@ -351,7 +394,7 @@ function handleClearDefects() {
 }
 
 .video-container {
-  width: 1000%;
+  width: 100%;
   height: 480px;
   background-color: #000;
   border-radius: 4px;

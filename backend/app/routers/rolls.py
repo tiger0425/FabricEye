@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import update, delete, func
 from typing import List, Optional, Dict
 from datetime import datetime
+import asyncio
+import random
 
 from app.core.database import get_db
 from app.models.roll import Roll, RollStatus
@@ -18,7 +20,7 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-# 全局存储正在运行的引擎实例（已升级为 CascadeEngine）
+# 全局存储正在运行的引擎实例
 active_engines: Dict[int, CascadeEngine] = {}
 
 @router.post("/")
@@ -39,7 +41,6 @@ async def create_roll(roll: RollCreate, db: AsyncSession = Depends(get_db)):
     except Exception as e:
         await db.rollback()
         return error(f"创建失败: {str(e)}")
-
     return success(RollResponse.model_validate(db_roll))
 
 @router.get("/")
@@ -53,17 +54,13 @@ async def list_rolls(
     query = select(Roll).offset(skip).limit(pageSize).order_by(Roll.created_at.desc())
     if status:
         query = query.where(Roll.status == status)
-
     result = await db.execute(query)
     rolls = result.scalars().all()
-
-    # 获取总数用于分页
     count_stmt = select(func.count()).select_from(Roll)
     if status:
         count_stmt = count_stmt.where(Roll.status == status)
     total_result = await db.execute(count_stmt)
     total = total_result.scalar()
-
     return success({
         "list": [RollResponse.model_validate(r) for r in rolls],
         "total": total
@@ -83,20 +80,16 @@ async def update_roll(roll_id: int, roll_update: RollUpdate, db: AsyncSession = 
     db_roll = result.scalar_one_or_none()
     if db_roll is None:
         return error("布卷不存在", code=404)
-
     update_data = roll_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_roll, key, value)
-
     db_roll.updated_at = datetime.utcnow()
-
     try:
         await db.commit()
         await db.refresh(db_roll)
     except Exception as e:
         await db.rollback()
         return error(f"更新失败: {str(e)}")
-
     return success(RollResponse.model_validate(db_roll))
 
 @router.delete("/{roll_id}")
@@ -105,93 +98,101 @@ async def delete_roll(roll_id: int, db: AsyncSession = Depends(get_db)):
     db_roll = result.scalar_one_or_none()
     if db_roll is None:
         return error("布卷不存在", code=404)
-
     if roll_id in active_engines:
         active_engines[roll_id].stop()
         del active_engines[roll_id]
-
     await db.delete(db_roll)
     try:
         await db.commit()
     except Exception as e:
         await db.rollback()
         return error(f"删除失败: {str(e)}")
-
     return success(message="删除成功")
 
 @router.post("/{roll_id}/start")
 async def start_roll_inspection(roll_id: int, db: AsyncSession = Depends(get_db)):
+    """开始验布 - 真实引擎模式"""
     result = await db.execute(select(Roll).where(Roll.id == roll_id))
     db_roll = result.scalar_one_or_none()
     if db_roll is None:
         return error("布卷不存在", code=404)
-
+    
+    # 检查是否已在验布中
     if roll_id in active_engines:
-        return error("该布卷已在验布中")
-
-    engine = CascadeEngine(roll_id)
-    if engine.start():
+        return error(f"该布卷已在验布中")
+    
+    try:
+        # 初始化并启动级联检测引擎
+        engine = CascadeEngine(roll_id)
+        if not engine.start():
+            return error("启动失败: 无法打开摄像头或初始化模型")
+            
         active_engines[roll_id] = engine
+        
+        # 更新布卷状态
         db_roll.status = RollStatus.INSPECTING
         db_roll.updated_at = datetime.utcnow()
         await db.commit()
-        return success(message="已开始验布（级联检测模式）")
-    else:
-        return error("开启验布引擎失败，请检查摄像头连接")
+        
+        return success(message="已开始验布")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return error(f"启动失败: {str(e)}")
 
 @router.post("/{roll_id}/stop")
 async def stop_roll_inspection(roll_id: int, db: AsyncSession = Depends(get_db)):
+    """停止验布"""
     result = await db.execute(select(Roll).where(Roll.id == roll_id))
     db_roll = result.scalar_one_or_none()
     if db_roll is None:
         return error("布卷不存在", code=404)
-
+    
+    # 从活跃引擎中移除并停止
     if roll_id in active_engines:
-        active_engines[roll_id].stop()
+        engine = active_engines[roll_id]
+        engine.stop()
         del active_engines[roll_id]
-
+    
+    # 更新布卷状态
     db_roll.status = RollStatus.COMPLETED
     db_roll.updated_at = datetime.utcnow()
     await db.commit()
+    
     return success(message="已停止验布")
-
 
 @router.get("/{roll_id}/cascade-status")
 async def get_cascade_status(roll_id: int):
-    """获取级联检测引擎状态"""
+    """获取级联状态"""
     if roll_id not in active_engines:
-        return error("该布卷未在验布中")
-    return success(active_engines[roll_id].get_status())
-
+        return success({
+            "is_running": False,
+            "roll_id": roll_id,
+            "status": "stopped"
+        })
+    
+    engine = active_engines[roll_id]
+    return success(engine.get_status())
 
 @router.get("/{roll_id}/report")
 async def get_roll_report(roll_id: int, db: AsyncSession = Depends(get_db)):
-    """生成布卷检测报告"""
-    # Fetch roll
     result = await db.execute(select(Roll).where(Roll.id == roll_id))
     roll = result.scalar_one_or_none()
     if roll is None:
         return error("布卷不存在", code=404)
-
-    # Fetch all defects for this roll
     defects_result = await db.execute(
         select(Defect)
         .where(Defect.roll_id == roll_id)
         .order_by(Defect.detected_at.desc())
     )
     defects = defects_result.scalars().all()
-
-    # Count by severity
     severe_count = sum(1 for d in defects if d.severity == DefectSeverity.SEVERE)
     moderate_count = sum(1 for d in defects if d.severity == DefectSeverity.MODERATE)
     minor_count = sum(1 for d in defects if d.severity == DefectSeverity.MINOR)
-
-    # Count by type
     type_counts: Dict[DefectType, int] = {}
     for d in defects:
         if d.defect_type is not None:
             type_counts[d.defect_type] = type_counts.get(d.defect_type, 0) + 1
-
     total_defects = len(defects)
     by_type = []
     for dt, count in type_counts.items():
@@ -202,11 +203,7 @@ async def get_roll_report(roll_id: int, db: AsyncSession = Depends(get_db)):
             "count": count,
             "percentage": percentage,
         })
-
-    # Quality score: start at 100, deduct 10/severe, 5/moderate, 2/minor, floor 0
     quality_score = max(0, 100 - (severe_count * 10) - (moderate_count * 5) - (minor_count * 2))
-
-    # Serialize defects
     def _serialize_defect(d: Defect) -> dict:
         return {
             "id": d.id,
@@ -226,7 +223,6 @@ async def get_roll_report(roll_id: int, db: AsyncSession = Depends(get_db)):
             "reviewed": d.reviewed,
             "reviewed_result": d.reviewed_result.value if d.reviewed_result else None,
         }
-
     report = {
         "roll": {
             "id": roll.id,
@@ -250,5 +246,4 @@ async def get_roll_report(roll_id: int, db: AsyncSession = Depends(get_db)):
         "defects": [_serialize_defect(d) for d in defects],
         "generated_at": datetime.utcnow().isoformat(),
     }
-
     return success(report)

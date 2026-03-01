@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     AI_API_KEY: str = ""
     AI_API_BASE_URL: str = "https://api.moonshot.cn/v1"
     AI_MODEL: str = "moonshot-v1-8k"
-    ANALYSIS_INTERVAL: float = 1.0  # 每秒分析1帧
+    ANALYSIS_INTERVAL: float = 5.0  # 每5秒分析1帧，降低服务器负载
 
     # Qwen3-VL 级联检测配置
     QWEN_API_BASE_URL: str = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"

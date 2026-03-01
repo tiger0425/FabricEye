@@ -223,8 +223,8 @@ const wsStatusText = computed(() => {
 const bufferPercentage = computed(() => {
   if (!cascadeStatus.value) return 0
   const { buffer_size, buffer_capacity } = cascadeStatus.value
-  if (!buffer_capacity) return 0
-  return Math.round((buffer_size / buffer_capacity) * 100)
+  if (!buffer_capacity || isNaN(buffer_size)) return 0
+  return Math.min(Math.max(Math.round((buffer_size / buffer_capacity) * 100), 0), 100)
 })
 
 /** 缓冲区颜色（根据占用率变化） */
@@ -237,8 +237,8 @@ const bufferColor = computed(() => {
 
 /** 验证队列百分比（满队列 = 10） */
 const queuePercentage = computed(() => {
-  if (!cascadeStatus.value) return 0
-  return Math.min(Math.round((cascadeStatus.value.verification_queue_size / 10) * 100), 100)
+  if (!cascadeStatus.value || isNaN(cascadeStatus.value.verification_queue_size)) return 0
+  return Math.min(Math.max(Math.round((cascadeStatus.value.verification_queue_size / 10) * 100), 0), 100)
 })
 
 /** 验证队列颜色 */

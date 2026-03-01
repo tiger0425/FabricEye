@@ -25,6 +25,7 @@ manager = ConnectionManager()
 
 @router.websocket("/ws/monitor/{roll_id}")
 async def websocket_endpoint(websocket: WebSocket, roll_id: int):
+    print(f"[WS] Connected to roll_id={roll_id}")
     await manager.connect(websocket)
     try:
         while True:
@@ -32,3 +33,7 @@ async def websocket_endpoint(websocket: WebSocket, roll_id: int):
             # 可以在这里处理来自前端的消息
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
+@router.get("/ws-test")
+async def ws_test():
+    return {"status": "ok", "message": "WebSocket router is working"}

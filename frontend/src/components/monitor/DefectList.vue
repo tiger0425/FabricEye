@@ -36,7 +36,7 @@
         <!-- 缺陷信息 -->
         <div class="defect-info">
           <div class="defect-header">
-            <span class="defect-type">{{ getDefectTypeText(defect.type) }}</span>
+          <span class="defect-type">{{ getDefectTypeText(defect.defectType || defect.type) }}</span>
             <el-tag :type="getSeverityType(defect.severity)" size="small">
               {{ getSeverityText(defect.severity) }}
             </el-tag>
@@ -84,8 +84,11 @@ const defectTypeMap = {
   broken_warp: '断经',
   broken_weft: '断纬',
   color_difference: '色差',
+  color_variance: '色差',
+  color_variation: '色差',
   stain: '污渍',
   damage: '破损',
+  hole: '破洞',
   other: '其他'
 }
 

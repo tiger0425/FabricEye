@@ -44,7 +44,7 @@ export default defineConfig({
       },
       // 代理 WebSocket 请求到后端服务器
       '/ws': {
-        target: 'ws://localhost:8001',
+        target: 'http://localhost:8001',
         ws: true,
         changeOrigin: true
       }

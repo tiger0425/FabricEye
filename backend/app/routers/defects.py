@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
 from typing import Optional
+import os
+from fastapi.responses import FileResponse
 
 from app.core.database import get_db
 from app.models.defect import Defect, DefectType, DefectTypeCN, DefectSeverity, ReviewResult
@@ -13,7 +15,6 @@ router = APIRouter(
     tags=["Defects"],
     responses={404: {"description": "Not found"}},
 )
-
 
 def _serialize_defect(d: Defect) -> dict:
     """Convert a Defect ORM instance to a plain dict for JSON response."""
@@ -34,8 +35,8 @@ def _serialize_defect(d: Defect) -> dict:
         "detected_at": d.detected_at.isoformat() if d.detected_at else None,
         "reviewed": d.reviewed,
         "reviewed_result": d.reviewed_result.value if d.reviewed_result else None,
+        "imageUrl": f"/api/defects/image/{d.id}"
     }
-
 
 @router.get("/")
 async def read_defects(
@@ -46,8 +47,6 @@ async def read_defects(
     db: AsyncSession = Depends(get_db),
 ):
     skip = (page - 1) * pageSize
-
-    # Build query
     query = select(Defect).order_by(Defect.detected_at.desc())
     count_stmt = select(func.count()).select_from(Defect)
 
@@ -61,13 +60,11 @@ async def read_defects(
             query = query.where(Defect.severity == sev_enum)
             count_stmt = count_stmt.where(Defect.severity == sev_enum)
         except ValueError:
-            pass  # ignore invalid severity filter
+            pass
 
-    # Get total count
     total_result = await db.execute(count_stmt)
     total = total_result.scalar()
 
-    # Get paginated results
     query = query.offset(skip).limit(pageSize)
     result = await db.execute(query)
     defects = result.scalars().all()
@@ -77,24 +74,20 @@ async def read_defects(
         "total": total,
     })
 
-
 @router.get("/stats")
 async def get_defect_stats(
     rollId: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    # Base filter
     base_filter = []
     if rollId is not None:
         base_filter.append(Defect.roll_id == rollId)
 
-    # Total count
     total_stmt = select(func.count()).select_from(Defect)
     for f in base_filter:
         total_stmt = total_stmt.where(f)
     total = (await db.execute(total_stmt)).scalar()
 
-    # Count by severity
     sev_stmt = (
         select(Defect.severity, func.count())
         .group_by(Defect.severity)
@@ -111,13 +104,11 @@ async def get_defect_stats(
         "minor": sev_counts.get(DefectSeverity.MINOR, 0),
     })
 
-
 @router.get("/categories")
 async def get_defect_categories(
     rollId: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    # Group by defect_type
     query = (
         select(Defect.defect_type, func.count())
         .group_by(Defect.defect_type)
@@ -127,8 +118,6 @@ async def get_defect_categories(
 
     result = await db.execute(query)
     rows = result.all()
-
-    # Calculate total for percentage
     total = sum(row[1] for row in rows)
 
     categories = []
@@ -143,16 +132,33 @@ async def get_defect_categories(
 
     return success(categories)
 
+@router.get("/image/{defect_id}")
+async def get_defect_image(defect_id: str, db: AsyncSession = Depends(get_db)):
+    """获取缺陷截图 - 支持数据库ID或级联临时ID(以cid_开头)"""
+    # 检查是否是级联临时ID
+    if defect_id.startswith("cid_"):
+        image_path = os.path.join(os.getcwd(), "storage", "debug_crops", f"{defect_id}.jpg")
+        if os.path.exists(image_path):
+            return FileResponse(image_path, media_type="image/jpeg")
+        raise HTTPException(status_code=404, detail=f"临时图片不存在: {image_path}")
 
-@router.get("/{defect_id}")
-async def read_defect(defect_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Defect).where(Defect.id == defect_id))
-    defect = result.scalar_one_or_none()
-    if defect is None:
-        return error("缺陷不存在", code=404)
-    return success(_serialize_defect(defect))
-
-
+    # 否则查询数据库
+    try:
+        did = int(defect_id)
+        result = await db.execute(select(Defect).where(Defect.id == did))
+        defect = result.scalar_one_or_none()
+        
+        if not defect or not defect.snapshot_path:
+            raise HTTPException(status_code=404, detail="缺陷或截图不存在")
+        
+        # 使用绝对路径
+        image_path = os.path.abspath(defect.snapshot_path)
+        if os.path.exists(image_path):
+            return FileResponse(image_path, media_type="image/jpeg")
+    except ValueError:
+        pass
+        
+    raise HTTPException(status_code=404, detail="图片文件不存在")
 @router.post("/{defect_id}/mark")
 async def mark_defect(defect_id: int, data: dict, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Defect).where(Defect.id == defect_id))
@@ -160,7 +166,6 @@ async def mark_defect(defect_id: int, data: dict, db: AsyncSession = Depends(get
     if defect is None:
         return error("缺陷不存在", code=404)
 
-    # Map result string to ReviewResult enum
     result_str = data.get("result", "")
     try:
         review_result = ReviewResult(result_str)
@@ -178,7 +183,6 @@ async def mark_defect(defect_id: int, data: dict, db: AsyncSession = Depends(get
         return error(f"标记失败: {str(e)}")
 
     return success(_serialize_defect(defect), message="标记成功")
-
 
 @router.delete("/{defect_id}")
 async def delete_defect(defect_id: int, db: AsyncSession = Depends(get_db)):
