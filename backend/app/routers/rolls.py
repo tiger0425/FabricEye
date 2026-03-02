@@ -12,7 +12,7 @@ from app.models.roll import Roll, RollStatus
 from app.models.defect import Defect, DefectType, DefectTypeCN, DefectSeverity
 from app.schemas.roll import RollCreate, RollUpdate, RollResponse
 from app.utils.response import success, error
-from app.services.cascade_engine import CascadeEngine
+from app.services.cascade import CascadeEngine
 
 router = APIRouter(
     prefix="/rolls",
@@ -61,8 +61,29 @@ async def list_rolls(
         count_stmt = count_stmt.where(Roll.status == status)
     total_result = await db.execute(count_stmt)
     total = total_result.scalar()
+    # 手动填充 videoId
+    roll_list = []
+    from app.models.video import Video
+    for r in rolls:
+        video_result = await db.execute(
+            select(Video.id).where(Video.roll_id == r.id).order_by(Video.id.desc()).limit(1)
+        )
+        latest_video_id = video_result.scalar()
+        
+        # 转换为响应模型并手动注入字段
+        res_data = RollResponse.model_validate(r)
+        # 注意：这里我们构造一个字典来强制使用 CamelCase 别名
+        data_dict = res_data.model_dump(by_alias=True)
+        data_dict["videoId"] = latest_video_id
+        
+        roll_list.append(data_dict)
+
     return success({
-        "list": [RollResponse.model_validate(r) for r in rolls],
+        "list": roll_list,
+        "total": total
+    })
+    return success({
+        "list": roll_list,
         "total": total
     })
 
@@ -124,7 +145,7 @@ async def start_roll_inspection(roll_id: int, db: AsyncSession = Depends(get_db)
     try:
         # 初始化并启动级联检测引擎
         engine = CascadeEngine(roll_id)
-        if not engine.start():
+        if not await engine.start():
             return error("启动失败: 无法打开摄像头或初始化模型")
             
         active_engines[roll_id] = engine
