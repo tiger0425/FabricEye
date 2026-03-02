@@ -66,6 +66,15 @@
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="handleView(row)">查看</el-button>
+            <el-button
+              v-if="row.status === 'completed' && (row.videoId || row.video_id)"
+              link
+              type="success"
+              @click="handlePlayback(row)"
+            >
+              <el-icon><VideoPlay /></el-icon>
+              查看回放
+            </el-button>
             <el-button 
               v-if="row.status === 'pending'" 
               link 
@@ -112,11 +121,14 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { VideoPlay } from '@element-plus/icons-vue'
 import { useRollsStore } from '@/stores'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import RollForm from '@/components/rolls/RollForm.vue'
 
 const rollsStore = useRollsStore()
+const router = useRouter()
 
 // 筛选表单
 const filterForm = reactive({
@@ -219,6 +231,18 @@ function handleAdd() {
 function handleView(row) {
   // TODO: 跳转到详情页或打开详情对话框
   console.log('查看布卷:', row)
+}
+
+/**
+ /**
+ * 查看视频回放
+ */
+function handlePlayback(row) {
+  router.push({
+    name: 'VideoPlayback',
+    params: { rollId: row.id },
+    query: { videoId: row.videoId }
+  })
 }
 
 /**

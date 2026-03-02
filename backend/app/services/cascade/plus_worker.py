@@ -82,7 +82,7 @@ class PlusWorker:
             if not defect:
                 return
             
-            if plus_confidence >= settings.CASCADE_PLUS_THRESHOLD:
+            if plus_confidence >= settings.SKIP_VERIFY_THRESHOLD:
                 defect.status = "confirmed"
                 self._confirm_defect(defect, plus_confidence, snapshot_path, loop)
             else:

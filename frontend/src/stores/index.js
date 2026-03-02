@@ -6,6 +6,7 @@
 // 导入各个store模块
 import { useRollsStore } from './rolls'
 import { useMonitorStore } from './monitor'
+import { useVideosStore } from './videos'
 
 /**
  * 统一导出所有store
@@ -13,8 +14,6 @@ import { useMonitorStore } from './monitor'
  */
 export {
   useRollsStore,
-  useMonitorStore
+  useMonitorStore,
+  useVideosStore
 }
-
-// 根store的额外配置（如需要）
-// 可以在这里添加跨store的状态共享逻辑

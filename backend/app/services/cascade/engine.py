@@ -72,6 +72,8 @@ class CascadeEngine:
         await self._init_video_recording()
         
         self._capture_worker.start(self.video_path)
+        self._flash_worker.start(self.analyzer, self.roll_id)
+        self._plus_worker.start(self.analyzer, self.video_id, self.recording_start_time)
         self._flash_worker.start(self.analyzer)
         self._plus_worker.start(self.analyzer, self.video_id, self.recording_start_time)
         

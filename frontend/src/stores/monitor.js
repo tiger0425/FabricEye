@@ -83,7 +83,7 @@ export const useMonitorStore = defineStore('monitor', () => {
   async function fetchVideoList() {
     videoLoading.value = true
     try {
-      const data = await videosApi.getVideoList()
+      const data = await videosApi.getRollVideos()
       videoList.value = data || []
     } catch (error) {
       console.error('获取视频流列表失败:', error)

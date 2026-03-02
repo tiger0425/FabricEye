@@ -93,32 +93,62 @@
         </div>
       </div>
 
-      <!-- 统计数据 -->
+      <!-- V2.0 级联检测统计 -->
       <div class="stats-section">
-        <div class="stats-title">统计</div>
-        <div class="stats-grid">
-          <div class="stat-cell confirmed">
-            <span class="stat-icon">✅</span>
-            <span class="stat-label">已确认</span>
-            <span class="stat-val">{{ cascadeStatus?.confirmed_count ?? 0 }}</span>
+        <div class="stats-title">V2.0 级联检测统计</div>
+        <div class="stats-grid-v2">
+          <!-- 快速通道 -->
+          <div class="stat-cell fast-track">
+            <span class="stat-icon">⚡</span>
+            <span class="stat-label">快速通道确认</span>
+            <span class="stat-val">{{ fastTrackCount }}</span>
+            <span class="stat-desc">(Flash >= 0.8)</span>
           </div>
+          <!-- Plus 复核确认 -->
+          <div class="stat-cell plus-confirmed">
+            <span class="stat-icon">🎯</span>
+            <span class="stat-label">Plus复核确认</span>
+            <span class="stat-val">{{ plusConfirmedCount }}</span>
+            <span class="stat-desc">(复核通过)</span>
+          </div>
+          <!-- 待验证队列 -->
+          <div class="stat-cell pending-queue">
+            <span class="stat-icon">⏳</span>
+            <span class="stat-label">待验证队列</span>
+            <span class="stat-val">{{ cascadeStatus?.verification_queue_size ?? 0 }}</span>
+            <span class="stat-desc">(等待Plus)</span>
+          </div>
+          <!-- 已拒绝 -->
           <div class="stat-cell rejected">
             <span class="stat-icon">❌</span>
             <span class="stat-label">已拒绝</span>
             <span class="stat-val">{{ cascadeStatus?.rejected_count ?? 0 }}</span>
-          </div>
-          <div class="stat-cell pending">
-            <span class="stat-icon">⏳</span>
-            <span class="stat-label">待验证</span>
-            <span class="stat-val">{{ cascadeStatus?.pending_count ?? 0 }}</span>
-          </div>
-          <div class="stat-cell expired">
-            <span class="stat-icon">💨</span>
-            <span class="stat-label">已过期</span>
-            <span class="stat-val">{{ cascadeStatus?.expired_count ?? 0 }}</span>
+            <span class="stat-desc">(复核未通过)</span>
           </div>
         </div>
       </div>
+
+      <!-- 验证队列中的缺陷（待复核） -->
+      <div v-if="pendingDefects.length > 0" class="pending-section">
+        <div class="pending-header">
+          <span class="pending-title">🕐 验证队列中的缺陷 ({{ pendingDefects.length }})</span>
+          <span class="pending-desc">等待 Plus 引擎复核...</span>
+        </div>
+        <div class="pending-list">
+          <div
+            v-for="(defect, index) in pendingDefects"
+            :key="'pending-' + index"
+            class="pending-item"
+          >
+            <span class="pending-cid">#{{ defect.cascadeId }}</span>
+            <span class="pending-type">{{ defectTypeLabel(defect.defectType) }}</span>
+            <span class="pending-confidence">F: {{ formatConfidence(defect.flashConfidence) }}</span>
+            <span class="pending-status">等待复核</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 最新确认缺陷（快速通道 + Plus复核） -->
 
       <!-- 最新检测缺陷 -->
       <div class="feed-section">
@@ -129,19 +159,22 @@
         <div v-else class="defect-feed">
           <div
             v-for="(defect, index) in recentDefects"
-            :key="defect.cascadeId + '-' + index"
+            :key="(defect.cascadeId || defect.id) + '-' + index"
             class="defect-item"
-            :class="'severity-' + defect.severity"
+            :class="'severity-' + (defect.severity || 'minor')"
           >
             <span class="defect-severity-dot" :class="severityDotClass(defect.severity)"></span>
-            <span class="defect-type">{{ defectTypeLabel(defect.defectType) }}</span>
-            <span class="defect-confidence">
-              Flash: {{ formatConfidence(defect.flashConfidence) }}
+            <span class="defect-route-badge" :class="defect.fastTrack ? 'badge-fast' : 'badge-plus'">
+              {{ defect.fastTrack ? '⚡' : '🎯' }}
             </span>
+            <span class="defect-type">{{ defectTypeLabel(defect.defectType || defect.defect_type) }}</span>
             <span class="defect-confidence">
-              Plus: {{ formatConfidence(defect.plusConfidence) }}
+              F: {{ formatConfidence(defect.flashConfidence) }}
             </span>
-            <span class="defect-time">{{ formatRelativeTime(defect.timestamp) }}</span>
+            <span v-if="!defect.fastTrack" class="defect-confidence">
+              P: {{ formatConfidence(defect.plusConfidence || defect.confidence) }}
+            </span>
+            <span class="defect-time">{{ formatRelativeTime(defect.timestamp || defect.detected_at) }}</span>
           </div>
         </div>
       </div>
@@ -149,9 +182,11 @@
   </el-card>
 </template>
 
+
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { getCascadeStatus } from '@/api/cascade'
+import { useMonitorStore } from '@/stores'
 
 // ==================== Props ====================
 const props = defineProps({
@@ -183,6 +218,9 @@ const loading = ref(false)
 // 最近检测到的缺陷（实时 WebSocket 推送）
 const recentDefects = ref([])
 
+// 验证队列中的待复核缺陷
+const pendingDefects = ref([])
+
 // 轮询定时器
 let pollTimer = null
 
@@ -195,7 +233,20 @@ const DEFECT_TYPE_MAP = {
   weft_break: '断纬'
 }
 
+// ==================== Store ====================
+const monitorStore = useMonitorStore()
+
 // ==================== 计算属性 ====================
+
+// 快速通道确认的缺陷计数
+const fastTrackCount = computed(() => {
+  return recentDefects.value.filter(d => d.fastTrack === true).length
+})
+
+// Plus复核确认的缺陷计数
+const plusConfirmedCount = computed(() => {
+  return recentDefects.value.filter(d => d.fastTrack !== true && d.type === 'defect_confirmed').length
+})
 
 /** WebSocket 状态样式类 */
 const wsStatusClass = computed(() => {
@@ -281,16 +332,33 @@ function severityDotClass(severity) {
 /** 相对时间格式化 */
 function formatRelativeTime(timestamp) {
   if (!timestamp) return ''
+  
+  let date
+  if (typeof timestamp === 'number') {
+    // 处理秒级时间戳（如果有的话）
+    date = new Date(timestamp * 1000)
+  } else {
+    // 处理日期字符串 (ISO/SQL 格式)
+    date = new Date(timestamp)
+  }
+  
   const now = Date.now()
-  const ts = new Date(timestamp).getTime()
+  const ts = date.getTime()
+  
+  if (isNaN(ts)) return '未知'
+  
   const diff = Math.floor((now - ts) / 1000) // 秒数
 
-  if (diff < 10) return '刚刚'
-  if (diff < 60) return `${diff}秒前`
-  const mins = Math.floor(diff / 60)
+  if (diff < 10 && diff > -10) return '刚刚'
+  if (diff < 60 && diff >= 0) return `${diff}秒前`
+  
+  const mins = Math.floor(Math.abs(diff) / 60)
   if (mins < 60) return `${mins}分前`
+  
   const hours = Math.floor(mins / 60)
-  return `${hours}小时前`
+  if (hours < 24) return `${hours}小时前`
+  
+  return `${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`
 }
 
 // ==================== 数据获取 ====================
@@ -333,27 +401,58 @@ watch(
   (msg) => {
     if (!msg) return
     if (msg.type === 'defect_confirmed') {
-      // 将新缺陷插入顶部，最多保留 20 条
+      // 确认的缺陷（快速通道或Plus复核）
       recentDefects.value.unshift(msg)
       if (recentDefects.value.length > 20) {
         recentDefects.value.pop()
+      }
+      // 如果是快速通道，从待验证列表中移除
+      if (msg.fastTrack) {
+        const idx = pendingDefects.value.findIndex(d => d.cascadeId === msg.cascadeId)
+        if (idx > -1) pendingDefects.value.splice(idx, 1)
+      }
+    } else if (msg.type === 'defect_pending') {
+      // 新检测进入验证队列
+      pendingDefects.value.unshift({
+        cascadeId: msg.cascadeId,
+        defectType: msg.defectType,
+        flashConfidence: msg.flashConfidence,
+        timestamp: msg.timestamp
+      })
+      if (pendingDefects.value.length > 10) {
+        pendingDefects.value.pop()
       }
     }
   }
 )
 
-/** 监听 rollId 变化，重启轮询 */
+
+/** 监听 rollId 变化 */
 watch(
   () => props.rollId,
   (newId) => {
     if (newId) {
       cascadeStatus.value = null
+      // 这里的清空改为从全局 Store 获取最近的数据
+      // 避免"最新检测"在初始化时显示为空
       recentDefects.value = []
       startPolling()
     } else {
       stopPolling()
     }
   }
+)
+
+/** 监听全局 Store 的缺陷列表，同步到"最新检测" */
+watch(
+  () => monitorStore.defectList,
+  (newList) => {
+    if (newList && newList.length > 0 && recentDefects.value.length === 0) {
+      // 页面初次加载时，同步最近的 5 条数据到面板
+      recentDefects.value = newList.slice(0, 5)
+    }
+  },
+  { immediate: true }
 )
 
 // ==================== 生命周期 ====================
@@ -707,5 +806,174 @@ onUnmounted(() => {
   color: #c0c4cc;
   white-space: nowrap;
   font-size: 11px;
+}
+
+.defect-route-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-right: 4px;
+}
+
+.badge-fast {
+  background-color: #67c23a;
+  color: white;
+}
+
+.badge-plus {
+  background-color: #409eff;
+  color: white;
+}
+
+/* ========== V2.0 统计网格 ========== */
+.stats-grid-v2 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.stats-grid-v2 .stat-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 8px;
+  background-color: #f5f7fa;
+  border-radius: 6px;
+  border: 1px solid #e4e7ed;
+}
+
+.stats-grid-v2 .stat-cell .stat-icon {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+.stats-grid-v2 .stat-cell .stat-label {
+  font-size: 12px;
+  color: #606266;
+  margin-bottom: 2px;
+  flex: none;
+}
+
+.stats-grid-v2 .stat-cell .stat-val {
+  font-size: 20px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.stats-grid-v2 .stat-cell .stat-desc {
+  font-size: 10px;
+  color: #909399;
+  margin-top: 2px;
+}
+
+.stats-grid-v2 .stat-cell.fast-track {
+  background-color: #f0f9eb;
+  border-color: #67c23a;
+}
+
+.stats-grid-v2 .stat-cell.fast-track .stat-val {
+  color: #67c23a;
+}
+
+.stats-grid-v2 .stat-cell.plus-confirmed {
+  background-color: #ecf5ff;
+  border-color: #409eff;
+}
+
+.stats-grid-v2 .stat-cell.plus-confirmed .stat-val {
+  color: #409eff;
+}
+
+.stats-grid-v2 .stat-cell.pending-queue {
+  background-color: #fdf6ec;
+  border-color: #e6a23c;
+}
+
+.stats-grid-v2 .stat-cell.pending-queue .stat-val {
+  color: #e6a23c;
+}
+
+.stats-grid-v2 .stat-cell.rejected {
+  background-color: #fef0f0;
+  border-color: #f56c6c;
+}
+
+.stats-grid-v2 .stat-cell.rejected .stat-val {
+  color: #f56c6c;
+}
+
+/* ========== 待验证区域 ========== */
+.pending-section {
+  margin-top: 16px;
+  padding: 12px;
+  background-color: #fdf6ec;
+  border: 1px solid #e6a23c;
+  border-radius: 6px;
+}
+
+.pending-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.pending-title {
+  font-weight: 600;
+  color: #e6a23c;
+}
+
+.pending-desc {
+  font-size: 12px;
+  color: #909399;
+}
+
+.pending-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pending-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  background-color: white;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.pending-cid {
+  color: #909399;
+  font-size: 11px;
+  margin-right: 8px;
+  min-width: 30px;
+}
+
+.pending-type {
+  font-weight: 500;
+  color: #303133;
+  min-width: 40px;
+  margin-right: 8px;
+}
+
+.pending-confidence {
+  color: #606266;
+  font-size: 12px;
+  margin-right: 8px;
+}
+
+.pending-status {
+  margin-left: auto;
+  font-size: 11px;
+  color: #e6a23c;
+  background-color: #fdf6ec;
+  padding: 2px 6px;
+  border-radius: 3px;
 }
 </style>
