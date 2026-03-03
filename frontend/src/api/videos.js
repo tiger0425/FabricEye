@@ -5,44 +5,14 @@
 import request from '@/utils/request'
 
 /**
- * 获取视频流列表
- * @returns {Promise} 视频流列表数据
- */
-export function getVideoList() {
-  return request({
-    url: '/videos',
-    method: 'get'
-  })
-}
-
-/**
- * 获取视频流详情
- * @param {string} id - 视频流ID
- * @returns {Promise} 视频流详情数据
- */
-export function getVideoDetail(id) {
-  return request({
-    url: `/videos/${id}`,
-    method: 'get'
-  })
-}
-
-/**
  * 获取实时视频流地址
- * @param {string} id - 视频流ID
- * @returns {Promise} 视频流地址
  */
 export function getVideoStreamUrl(id) {
-  return request({
-    url: `/videos/${id}/stream`,
-    method: 'get'
-  })
+  return `/api/videos/${id}/stream`
 }
 
 /**
  * 启动视频流
- * @param {string} id - 视频流ID
- * @returns {Promise} 启动结果
  */
 export function startVideoStream(id) {
   return request({
@@ -53,8 +23,6 @@ export function startVideoStream(id) {
 
 /**
  * 停止视频流
- * @param {string} id - 视频流ID
- * @returns {Promise} 停止结果
  */
 export function stopVideoStream(id) {
   return request({
@@ -65,8 +33,6 @@ export function stopVideoStream(id) {
 
 /**
  * 获取视频流状态
- * @param {string} id - 视频流ID
- * @returns {Promise} 视频流状态数据
  */
 export function getVideoStatus(id) {
   return request({
@@ -77,8 +43,6 @@ export function getVideoStatus(id) {
 
 /**
  * 获取视频流帧截图
- * @param {string} id - 视频流ID
- * @returns {Promise} 截图数据
  */
 export function getVideoSnapshot(id) {
   return request({
@@ -88,27 +52,73 @@ export function getVideoSnapshot(id) {
 }
 
 /**
- * 获取视频录制列表
- * @param {Object} params - 查询参数
- * @param {string} params.rollId - 布卷ID
- * @returns {Promise} 录制列表数据
+ * 获取视频详情
  */
-export function getRecordingList(params) {
+export function getVideoDetail(id) {
   return request({
-    url: '/videos/recordings',
-    method: 'get',
-    params
+    url: `/videos/${id}/info`,
+    method: 'get'
   })
 }
 
 /**
- * 获取视频录制详情
- * @param {string} id - 录制ID
- * @returns {Promise} 录制详情数据
+ * 获取视频播放URL (直接供 <video src> 使用)
  */
-export function getRecordingDetail(id) {
+export function getVideoPlayUrl(id) {
+  return `/api/videos/stream/${id}`
+}
+
+/**
+ * 获取视频缺陷列表 (时间轴)
+ */
+export function getVideoDefects(id) {
   return request({
-    url: `/videos/recordings/${id}`,
+    url: `/videos/${id}/defects/timeline`,
     method: 'get'
+  })
+}
+
+/**
+ * 生成标记视频 (导出)
+ */
+export function generateMarkedVideo(id) {
+  return request({
+    url: `/videos/${id}/export-marked`,
+    method: 'post'
+  })
+}
+
+/**
+ * 查询导出状态
+ */
+export function getExportStatus(taskId) {
+  return request({
+    url: `/videos/export-status/${taskId}`,
+    method: 'get'
+  })
+}
+
+/**
+ * 下载标记视频
+ */
+export function getMarkedVideoDownloadUrl(taskId) {
+  return `/api/videos/download-marked/${taskId}`
+}
+
+/**
+ * 获取视频流列表 (别名)
+ */
+export function getVideoList(params) {
+  return getRollVideos(params)
+}
+
+/**
+ * 获取布卷关联的视频列表
+ */
+export function getRollVideos(params) {
+  return request({
+    url: '/videos',
+    method: 'get',
+    params
   })
 }
