@@ -39,7 +39,8 @@ class RollResponse(RollBase):
     status: RollStatus
     created_at: datetime
     updated_at: datetime
-    
+    video_id: Optional[int] = Field(None, alias="videoId")
+
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,
