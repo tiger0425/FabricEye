@@ -55,6 +55,10 @@ class Roll(Base):
 
     extra_data: Mapped[dict | None] = mapped_column(JSON, nullable=True, comment="扩展字段")
 
+    # ERP 关联字段
+    erp_id: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="ERP 系统关联 ID")
+    erp_sync_status: Mapped[str | None] = mapped_column(String(20), default="pending", nullable=True, comment="ERP 同步状态")
+    
     videos: Mapped[list["Video"]] = relationship("Video", back_populates="roll", cascade="all, delete-orphan")
     defects: Mapped[list["Defect"]] = relationship("Defect", back_populates="roll", cascade="all, delete-orphan")
 

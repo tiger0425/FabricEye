@@ -11,12 +11,15 @@ class RollBase(BaseModel):
     roll_number: str = Field(..., alias="rollNumber")
     fabric_type: Optional[str] = Field(None, alias="fabricType")
     batch_number: Optional[str] = Field(None, alias="batchNumber")
+    erp_id: Optional[str] = Field(None, alias="erpId")
+    erp_sync_status: Optional[str] = Field("pending", alias="erpSyncStatus")
     length_meters: Optional[float] = Field(None, alias="lengthMeters")
     
     model_config = ConfigDict(
         populate_by_name=True,
         alias_generator=to_camel
     )
+
 
 class RollCreate(RollBase):
     pass
@@ -36,7 +39,8 @@ class RollResponse(RollBase):
     status: RollStatus
     created_at: datetime
     updated_at: datetime
-    
+    video_id: Optional[int] = Field(None, alias="videoId")
+
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,

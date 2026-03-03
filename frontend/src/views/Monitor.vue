@@ -42,6 +42,13 @@
           </div>
         </el-card>
 
+        <!-- 级联检测状态面板 -->
+        <CascadePanel
+          :roll-id="currentRollId"
+          :ws-message="lastMessage"
+          :ws-status="wsStatus"
+        />
+
         <!-- AI状态面板 -->
         <el-card class="status-card">
           <template #header>
@@ -120,20 +127,41 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useMonitorStore } from '@/stores'
 import { ElMessage } from 'element-plus'
 import VideoPlayer from '@/components/monitor/VideoPlayer.vue'
 import DefectList from '@/components/monitor/DefectList.vue'
 import StatusPanel from '@/components/monitor/StatusPanel.vue'
+import CascadePanel from '@/components/monitor/CascadePanel.vue'
+import { useWebSocket } from '@/utils/websocket'
 
+import * as rollsApi from '@/api/rolls'
+import * as defectsApi from '@/api/defects'
 const monitorStore = useMonitorStore()
 
 // 视频流URL
 const streamUrl = ref('')
 
+// 当前布卷 ID（用于级联检测）
+const currentRollId = ref(1)
+
 // 定时器
 let statsTimer = null
+
+// ==================== WebSocket ====================
+// 构建 WebSocket URL，通过 Vite 代理 /ws -> ws://localhost:8001
+const wsUrl = `/ws/monitor/${currentRollId.value}`
+const { status: wsStatus, lastMessage, connect: wsConnect, disconnect: wsDisconnect } = useWebSocket(wsUrl)
+
+// 监听 WebSocket 消息，处理实时缺陷推送
+watch(lastMessage, (msg) => {
+  if (!msg) return
+  if (msg.type === 'defect_confirmed') {
+    monitorStore.addRealTimeDefect(msg)
+  }
+})
+
 
 /**
  * 组件挂载时初始化
@@ -154,6 +182,26 @@ onUnmounted(() => {
 /**
  * 初始化数据
  */
+/**
+ * 加载历史缺陷数据
+ */
+async function loadHistoricalDefects() {
+  try {
+    const res = await defectsApi.getDefectList({ pageSize: 50 })
+ if (res?.list) {
+ const defects = res.list.map(d => ({
+        ...d,
+        imageUrl: `/api/defects/image/${d.id}`
+      }))
+ monitorStore.defectList = defects
+      console.log('Loaded historical defects:', defects.length)
+    }
+  } catch (error) {
+    console.error('加载历史缺陷失败:', error)
+  }
+}
+
+
 // Debug: set a global to track
 window.initDataCalled = false
 
@@ -170,6 +218,19 @@ async function initData() {
     
     // 获取缺陷统计
     await monitorStore.fetchDefectStats()
+
+    // 获取布卷详情，同步验布状态
+    const rollDetail = await rollsApi.getRollDetail(currentRollId.value)
+    if (rollDetail && rollDetail.status === 'inspecting') {
+      monitorStore.streamStatus = 'connected'
+      wsConnect()
+      console.log('Detected existing inspection, updated streamStatus to connected')
+    }
+
+    await monitorStore.fetchDefectStats()
+
+ // 加载历史缺陷数据
+ await loadHistoricalDefects()
   } catch (error) {
     console.error('初始化数据失败:', error)
   }
@@ -224,23 +285,34 @@ function stopSnapshotPolling() {
  */
 async function handleToggleStream() {
   try {
-    if (monitorStore.isInspecting) {
-      // 停止监控
-      if (monitorStore.currentVideo) {
-        await monitorStore.stopStream(monitorStore.currentVideo.id)
-      }
-      ElMessage.success('已停止监控')
+    if (monitorStore.streamStatus === 'connected') {
+      // 停止验布 - 调用 rolls API
+      await rollsApi.stopInspection(currentRollId.value)
+      monitorStore.streamStatus = 'disconnected'
+      // 断开 WebSocket
+      wsDisconnect()
+      ElMessage.success('已停止验布')
     } else {
-      // 开始监控
-      if (monitorStore.currentVideo) {
-        await monitorStore.startStream(monitorStore.currentVideo.id)
-      }
-      ElMessage.success('已开始监控')
+      // 开始验布 - 调用 rolls API
+      await rollsApi.startInspection(currentRollId.value)
+      monitorStore.streamStatus = 'connected'
+      // 连接 WebSocket
+      wsConnect()
+      ElMessage.success('已开始验布')
     }
   } catch (error) {
-    ElMessage.error('操作失败')
+    console.error('操作失败详情:', error)
+    // 如果提示已经在验布中，说明状态不一致，尝试同步状态
+    if (error.message && error.message.includes('已在验布中')) {
+      monitorStore.streamStatus = 'connected'
+      wsConnect()
+      ElMessage.info('检测到已在验布中，已自动同步状态')
+    } else {
+      ElMessage.error('操作失败: ' + (error.message || '未知错误'))
+    }
   }
 }
+
 
 /**
  * 获取视频流状态类型
@@ -322,7 +394,7 @@ function handleClearDefects() {
 }
 
 .video-container {
-  width: 1000%;
+  width: 100%;
   height: 480px;
   background-color: #000;
   border-radius: 4px;

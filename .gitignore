@@ -1,42 +1,241 @@
-# Python
+# ============================================
+# FabricEye 项目 .gitignore
+# 最后更新: 2026-03-03
+# ============================================
+
+# ============================================
+# 1. Python / 后端
+# ============================================
+
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-backend/venv/
-backend/app/__pycache__/
-backend/app/core/__pycache__/
-backend/app/models/__pycache__/
-backend/app/routers/__pycache__/
-backend/app/schemas/__pycache__/
-backend/app/services/__pycache__/
-backend/app/utils/__pycache__/
-.env
-backend/backend.log
-backend/fabriceye.db
 
-# Virtual Environment
+# Virtual environments
+.Python
 venv/
 ENV/
+env/
+.venv
 
-# OS
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# PyBuilder
+target/
+
+# mypy
+.mypy_cache/
+
+# ============================================
+# 2. Node.js / 前端
+# ============================================
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Frontend build output
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+*.local
+
+# ============================================
+# 3. IDE / 编辑器
+# ============================================
+
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ============================================
+# 4. 操作系统
+# ============================================
+
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+*~
 
-# IDE
-.vscode/
-.idea/
+# ============================================
+# 5. 环境配置（包含敏感信息）
+# ============================================
 
-# Images/Large files
-*.png
-*.jpg
-*.jpeg
-data/
-storage/
+.env
+.env.local
+.env.*.local
 
-# Node
-frontend/node_modules/
-frontend/.vite/
-frontend/dist/
+# ============================================
+# 6. 数据库文件
+# ============================================
+
+*.db
+*.sqlite
+*.sqlite3
+backend/fabriceye.db
+backend/test_*.db
+
+# ============================================
+# 7. 日志文件
+# ============================================
+
+logs/
+*.log
+backend/*.log
+backend/crash.log
+backend/stdout.log
+backend/stderr.log
+backend/backend.log
+backend/final_test.log
+backend/fresh_backend.log
+backend/uvicorn_real.log
 frontend/frontend.log
+
+# ============================================
+# 8. 大文件 / 媒体文件（不提交到代码仓库）
+# ============================================
+
+# 视频文件
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.flv
+*.wmv
+
+# 音频文件
+*.mp3
+*.wav
+*.aac
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# 注意：以下目录中的图片也不提交
+backend/storage/videos/
+backend/storage/recordings/
+backend/storage/uploaded/
+backend/storage/snapshots/
+backend/storage/marked_videos/
+backend/storage/debug_crops/
+data/
+
+# ============================================
+# 9. 测试资产 - 新的规范 (2026-03-03)
+# ============================================
+
+# 自动生成的测试截图（不提交）
+tests/assets/screenshots/ui/latest/
+tests/assets/debug/
+tests/assets/recordings/
+tests/assets/**/*.log
+tests/reports/html/
+
+# 临时调试文件
+tests/assets/debug/frames/
+tests/assets/debug/logs/
+
+# 旧的不规范截图（在根目录的测试截图）
+/*-test.png
+/*-test-*.png
+/*-fixed.png
+/*-final.png
+/*-final_*.png
+/*-working.png
+/*-status.png
+/*-error.png
+/*-success.png
+/*_error.png
+/*_success.png
+debug-*.png
+debug-*.jpg
+video_frame_*.png
+video_frame_*.jpg
+stream_test_*.png
+monitor_*.png
+!monitor.vue  # 保留组件文件
+
+# ============================================
+# 10. 允许提交的文件（例外规则）
+# ============================================
+
+# 文档用图（经过压缩的小图片）
+!docs/images/**/*.png
+!docs/images/**/*.jpg
+!docs/images/**/*.jpeg
+!docs/images/**/*.gif
+!docs/images/**/*.svg
+
+# 缺陷示例图（用于文档和演示）
+!tests/assets/screenshots/defects/*.png
+!tests/assets/screenshots/defects/*.jpg
+
+# 架构图和示意图
+!docs/images/architecture/*.png
+!docs/images/architecture/*.jpg
+!docs/images/architecture/*.svg
+!docs/images/screenshots/*.png
+
+# 徽章图标
+!docs/images/badges/*.png
+!docs/images/badges/*.svg
+
+# 保持目录结构的占位文件
+!**/.gitkeep
+
+# ============================================
+# 11. 其他临时文件
+# ============================================
+
+*.tmp
+*.temp
+*.bak
+*.backup

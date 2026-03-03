@@ -47,10 +47,13 @@
           <el-form :model="aiSettingsForm" label-width="120px">
             <el-form-item label="模型选择">
               <el-select v-model="aiSettingsForm.modelType">
+                <el-option label="Qwen3.5 Flash" value="qwen3.5-flash" />
+                <el-option label="Qwen3.5 Plus" value="qwen3.5-plus" />
                 <el-option label="YOLOv8" value="yolov8" />
-                <el-option label="ResNet50" value="resnet50" />
-                <el-option label="EfficientNet" value="efficientnet" />
               </el-select>
+                <el-option label="Qwen3.5 Flash" value="qwen3.5-flash" />
+                <el-option label="Qwen3.5 Plus" value="qwen3.5-plus" />
+                <el-option label="YOLOv8" value="yolov8" />
             </el-form-item>
             <el-form-item label="置信度阈值">
               <el-slider 
@@ -144,7 +147,7 @@ const settingsForm = reactive({
 
 // AI模型设置表单
 const aiSettingsForm = reactive({
-  modelType: 'yolov8',
+  modelType: 'qwen3.5-flash',
   confidenceThreshold: 75,
   realTimeInference: true,
   defectCategories: ['断经', '断纬', '色差', '污渍', '破损']
@@ -181,7 +184,7 @@ function handleReset() {
   settingsForm.defectThreshold = 50
   settingsForm.videoRetentionDays = 7
   
-  aiSettingsForm.modelType = 'yolov8'
+  aiSettingsForm.modelType = 'qwen3.5-flash'
   aiSettingsForm.confidenceThreshold = 75
   aiSettingsForm.realTimeInference = true
   aiSettingsForm.defectCategories = ['断经', '断纬', '色差', '污渍', '破损']

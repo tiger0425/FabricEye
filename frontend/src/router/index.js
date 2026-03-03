@@ -78,7 +78,17 @@ const routes = [
           title: '系统设置',
           icon: 'Setting'
         }
-      }
+      },
+      {
+        // 视频回放
+        path: 'playback/:rollId',
+        name: 'VideoPlayback',
+        component: () => import('@/views/VideoPlayback.vue'),
+        meta: {
+          title: '视频回放',
+          icon: 'VideoPlay'
+        }
+      },
     ]
   }
 ]

@@ -1,0 +1,140 @@
+<script setup>
+import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { VideoCamera } from '@element-plus/icons-vue'
+import { useMonitorStore } from '@/stores'
+import { ElMessage } from 'element-plus'
+import VideoPlayer from '@/components/monitor/VideoPlayer.vue'
+import DefectList from '@/components/monitor/DefectList.vue'
+import StatusPanel from '@/components/monitor/StatusPanel.vue'
+import CascadePanel from '@/components/monitor/CascadePanel.vue'
+import { useWebSocket } from '@/utils/websocket'
+
+import * as rollsApi from '@/api/rolls'
+
+const monitorStore = useMonitorStore()
+
+// 视频流URL
+const streamUrl = ref('')
+
+// 当前布卷 ID
+const currentRollId = ref(1)
+
+// 统计定时器
+let statsTimer = null
+
+// ==================== WebSocket ====================
+const wsUrl = `/ws/monitor/${currentRollId.value}`
+const { status: wsStatus, lastMessage, connect: wsConnect, disconnect: wsDisconnect } = useWebSocket(wsUrl)
+
+// 监听 WebSocket 推送
+watch(lastMessage, (msg) => {
+  if (!msg) return
+  if (msg.type === 'defect_confirmed') {
+    console.log('--- WebSocket Defect Confirmed ---', msg)
+    monitorStore.addRealTimeDefect(msg)
+  }
+})
+
+onMounted(() => {
+  initData()
+})
+
+onUnmounted(() => {
+  stopStatsPolling()
+})
+
+async function initData() {
+  console.log('initData called')
+  // 立即开启视频预览（低帧率 MJPEG）
+  streamUrl.value = '/api/videos/1/stream'
+  monitorStore.streamStatus = 'connected'
+  
+  try {
+    // 检查后端是否已经在运行
+    const statusRes = await rollsApi.getCascadeStatus(currentRollId.value).catch(() => null)
+    if (statusRes?.data?.is_running) {
+      console.log('Engine already running, entering silent mode')
+      monitorStore.isInspecting = true
+      wsConnect()
+      stopStatsPolling()
+    } else {
+      console.log('Engine idle, starting poll')
+      monitorStore.isInspecting = false
+      startStatsPolling()
+    }
+    
+    // 加载基础数据
+    monitorStore.fetchVideoList()
+    monitorStore.fetchDefectStats(currentRollId.value)
+  } catch (e) {
+    console.error('initData error:', e)
+  }
+}
+
+/**
+ * 核心逻辑：开始/停止监控
+ */
+async function handleToggleStream() {
+  try {
+    // 再次确认状态
+    const statusRes = await rollsApi.getCascadeStatus(currentRollId.value).catch(() => null)
+    const currentlyRunning = statusRes?.data?.is_running
+
+    if (currentlyRunning) {
+      // 停止
+      console.log('Stopping inspection...')
+      await rollsApi.stopInspection(currentRollId.value)
+      monitorStore.isInspecting = false
+      wsDisconnect()
+      startStatsPolling() // 恢复轮询
+      ElMessage.success('已停止验布')
+    } else {
+      // 开始
+      console.log('Starting inspection...')
+      stopStatsPolling() // 彻底停止所有 HTTP 轮询，为后端 AI 腾出带宽
+      await rollsApi.startInspection(currentRollId.value)
+      monitorStore.isInspecting = true
+      wsConnect()
+      ElMessage.success('已开始验布，进入实时监听模式')
+    }
+  } catch (error) {
+    ElMessage.error('操作失败: ' + (error.message || '未知错误'))
+    // 失败了尝试恢复轮询
+    startStatsPolling()
+  }
+}
+
+function startStatsPolling() {
+  if (statsTimer) return
+  statsTimer = setInterval(() => {
+    if (!monitorStore.isInspecting) {
+      monitorStore.fetchDefectStats(currentRollId.value)
+    }
+  }, 5000)
+}
+
+function stopStatsPolling() {
+  if (statsTimer) {
+    clearInterval(statsTimer)
+    statsTimer = null
+  }
+}
+
+function getStreamStatusType() {
+  const map = { connected: 'success', connecting: 'warning', disconnected: 'info', error: 'danger' }
+  return map[monitorStore.streamStatus] || 'info'
+}
+
+function getStreamStatusText() {
+  const map = { connected: '已连接', connecting: '连接中', disconnected: '未连接', error: '连接错误' }
+  return map[monitorStore.streamStatus] || '未知'
+}
+
+function handleDefectClick(defect) {
+  console.log('Click defect:', defect)
+}
+
+function handleClearDefects() {
+  monitorStore.clearDefectList()
+}
+</script>
