@@ -261,7 +261,57 @@ tests/
 
 #### 详细规范
 请参阅 [测试资产管理规范](./docs/testing-assets-guideline.md)
+#### 详细规范
+请参阅 [测试资产管理规范](./docs/testing-assets-guideline.md)
 
+### API 文档更新规范
+
+**⚠️ 重要**: 每次修改 API 必须同步更新本文档！
+
+#### 更新时机
+
+| 场景 | 操作 |
+|------|------|
+| 新增 API | 立即更新 `docs/api-design.md` |
+| 修改 API 参数/响应 | 立即更新 `docs/api-design.md` |
+| 删除 API | 立即更新 `docs/api-design.md` |
+| 合并到主分支前 | 必须确认文档已同步 |
+
+#### 更新检查清单
+
+提交 API 变更前必须勾选：
+
+- [ ] 接口已实现并测试通过
+- [ ] `docs/api-design.md` 已更新
+- [ ] 请求/响应示例已验证正确
+- [ ] 错误码说明完整
+- [ ] 文档更新记录已添加
+
+#### 版本管理
+
+文档版本号规则：`主版本.次版本`
+- 主版本：重大架构变更
+- 次版本：API 增删改
+
+当前版本：**2.0**（最后更新：2026-03-03）
+
+#### 自动化文档生成
+
+项目支持从代码自动生成 API 文档：
+
+```bash
+# 自动生成 API 文档（Markdown 格式）
+cd scripts
+python generate_api_docs.py
+```
+
+生成的文档位于：`docs/api-auto-generated.md`
+
+**注意**：自动生成的文档仅供参考，详细的业务说明和示例仍需手动维护在 `docs/api-design.md` 中。
+
+---
+
+---
 ---
 
 ## 🤝 贡献与反馈

@@ -1,10 +1,14 @@
-# FabricEye API 设计文档
+# FabricEye API 设计文档 V2.0
+
+> **版本**: 2.0  
+> **最后更新**: 2026-03-03  
+> **状态**: 与代码同步
 
 ## 1. 概述
 
-本文档定义了 FabricEye AI 验布系统的 RESTful API 规范。API 采用 JSON 格式进行数据交换，支持布卷管理、视频录制控制、缺陷查询等功能。
+本文档定义了 FabricEye AI 验布系统的 RESTful API 规范。API 采用 JSON 格式进行数据交换，支持布卷管理、视频录制控制、缺陷查询、视频回放与导出等功能。
 
-**Base URL**: `http://localhost:8000/api/v1`
+**Base URL**: `http://localhost:8000/api`
 
 **通用响应格式**:
 ```json
@@ -143,7 +147,104 @@
 
 **Endpoint**: `DELETE /rolls/{roll_id}`
 
-**响应 (204 No Content)**
+**响应 (200 OK)**:
+```json
+{
+  "code": 0,
+  "message": "删除成功"
+}
+```
+
+### 2.6 开始验布
+
+**Endpoint**: `POST /rolls/{roll_id}/start`
+
+**说明**: 启动级联检测引擎，开始实时验布
+
+**响应 (200 OK)**:
+```json
+{
+  "code": 0,
+  "message": "已开始验布"
+}
+```
+
+### 2.7 停止验布
+
+**Endpoint**: `POST /rolls/{roll_id}/stop`
+
+**响应 (200 OK)**:
+```json
+{
+  "code": 0,
+  "message": "已停止验布"
+}
+```
+
+### 2.8 获取级联状态
+
+**Endpoint**: `GET /rolls/{roll_id}/cascade-status`
+
+**响应 (200 OK)**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "is_running": true,
+    "roll_id": 1,
+    "buffer_size": 5,
+    "buffer_capacity": 120,
+    "verification_queue_size": 0,
+    "pending_count": 0,
+    "confirmed_count": 12,
+    "rejected_count": 3,
+    "expired_count": 1,
+    "total_frames_captured": 1523
+  }
+}
+```
+
+### 2.9 获取布卷报告
+
+**Endpoint**: `GET /rolls/{roll_id}/report`
+
+**响应 (200 OK)**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "roll": {
+      "id": 1,
+      "roll_number": "R001",
+      "fabric_type": "涤纶",
+      "status": "completed"
+    },
+    "summary": {
+      "total_defects": 15,
+      "by_severity": {
+        "severe": 3,
+        "moderate": 7,
+        "minor": 5
+      },
+      "by_type": [
+        {
+          "type": "hole",
+          "type_cn": "破洞",
+          "count": 3,
+          "percentage": 20.0
+        }
+      ],
+      "quality_score": 85
+    },
+    "defects": [],
+    "generated_at": "2024-01-15T12:00:00Z"
+  }
+}
+```
+
+
 
 ## 3. 视频管理 API
 
@@ -221,6 +322,120 @@
 ### 3.4 获取布卷的视频列表
 
 **Endpoint**: `GET /rolls/{roll_id}/videos`
+
+### 3.5 获取视频信息
+
+**Endpoint**: `GET /videos/{video_id}/info`
+
+**响应 (200 OK)**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "roll_id": 1,
+    "file_path": "/storage/videos/roll_1_20240115_103000.mp4",
+    "file_size": 524288000,
+    "file_size_mb": 500.0,
+    "duration_seconds": 300.5,
+    "resolution": "1920x1080",
+    "fps": 30.0,
+    "status": "completed",
+    "started_at": "2024-01-15T10:30:00Z",
+    "completed_at": "2024-01-15T10:35:00Z"
+  }
+}
+```
+
+### 3.6 视频流播放
+
+**Endpoint**: `GET /videos/stream/{video_id}`
+
+**说明**: 返回视频文件流，支持范围请求（Range Requests）
+
+### 3.7 获取视频缺陷时间轴
+
+**Endpoint**: `GET /videos/{video_id}/defects/timeline`
+
+**说明**: 用于视频回放时叠加缺陷标记
+
+**响应 (200 OK)**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "video_id": 1,
+    "total_defects": 15,
+    "defects": [
+      {
+        "id": 1,
+        "timestamp": 125.5,
+        "duration": 2.0,
+        "bbox": [100, 200, 300, 400],
+        "type": "hole",
+        "type_cn": "破洞",
+        "confidence": 0.95,
+        "severity": "severe",
+        "snapshot_path": "/storage/snapshots/defect_1.jpg"
+      }
+    ]
+  }
+}
+```
+
+### 3.8 导出标记视频
+
+**Endpoint**: `POST /videos/{video_id}/export-marked`
+
+**说明**: 后台生成带缺陷标记的视频文件
+
+**请求体**:
+```json
+{
+  "format": "mp4",
+  "quality": "high"
+}
+```
+
+**响应 (200 OK)**:
+```json
+{
+  "code": 0,
+  "message": "导出任务已创建",
+  "data": {
+    "task_id": "uuid-string",
+    "status": "processing"
+  }
+}
+```
+
+### 3.9 查询导出状态
+
+**Endpoint**: `GET /videos/export-status/{task_id}`
+
+**响应 (200 OK)**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "status": "processing",
+    "progress": 65.5,
+    "output_path": "/storage/marked_videos/marked_1_20240303_143000.mp4"
+  }
+}
+```
+
+### 3.10 下载标记视频
+
+**Endpoint**: `GET /videos/download-marked/{task_id}`
+
+**说明**: 下载已完成的标记视频文件
+
+**响应**: 文件流（Content-Type: video/mp4）
+
 
 ## 4. 缺陷查询 API
 
@@ -339,7 +554,56 @@ ws.onmessage = (event) => {
 
 ### 5.2 消息格式
 
-**录制状态更新**:
+#### 5.2.1 检测状态更新
+
+```json
+{
+  "type": "cascade_status",
+  "data": {
+    "is_running": true,
+    "roll_id": 1,
+    "buffer_size": 5,
+    "buffer_capacity": 120,
+    "verification_queue_size": 0,
+    "pending_count": 0,
+    "confirmed_count": 12,
+    "rejected_count": 3,
+    "expired_count": 1,
+    "total_frames_captured": 1523
+  }
+}
+```
+
+#### 5.2.2 实时缺陷检测
+
+```json
+{
+  "type": "defect_detected",
+  "data": {
+    "defect_id": 1,
+    "defect_type": "hole",
+    "defect_type_cn": "破洞",
+    "confidence": 0.95,
+    "severity": "severe",
+    "position_meter": 50.5,
+    "timestamp": 125.5,
+    "bbox": [100, 200, 300, 400]
+  }
+}
+```
+
+#### 5.2.3 系统通知
+
+```json
+{
+  "type": "notification",
+  "data": {
+    "level": "info",
+    "message": "检测完成",
+    "timestamp": "2024-01-15T10:35:00Z"
+  }
+}
+```
 ```json
 {
   "type": "recording_status",
@@ -492,3 +756,13 @@ ws.onmessage = (event) => {
 | detected_at | datetime | 检测时间 |
 | reviewed | bool | 是否复核 |
 | reviewed_result | enum | 复核结果 |
+
+---
+
+## 文档更新记录
+
+| 日期 | 版本 | 变更内容 | 作者 |
+|------|------|----------|------|
+| 2026-03-03 | 2.0 | 更新为与代码同步，补充视频回放、导出相关 API，添加级联检测状态 API | AI助手 |
+| 2024-01-15 | 1.0 | 初始版本 | - |
+
