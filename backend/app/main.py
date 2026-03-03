@@ -40,7 +40,7 @@ async def get_debug_config():
         "AI_PROVIDER": settings.AI_PROVIDER,
         "QWEN_API_KEY_SET": bool(settings.QWEN_API_KEY),
         "QWEN_API_KEY_PREFIX": settings.QWEN_API_KEY[:5] + "..." if settings.QWEN_API_KEY else None,
-        "QWEN_FLASH_MODEL": settings.QWEN_FLASH_MODEL,
+        "PRIMARY_MODEL": settings.PRIMARY_MODEL,
         "QWEN_API_BASE_URL": settings.QWEN_API_BASE_URL,
         "CAMERA_TYPE": settings.CAMERA_TYPE
     }

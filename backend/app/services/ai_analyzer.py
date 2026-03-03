@@ -38,7 +38,7 @@ class AIAnalyzerService:
 
     def analyze_with_flash(self, frame: np.ndarray) -> List[Dict[str, Any]]:
         """
-        同步接口：使用 Qwen3-VL Flash 模型快速扫描全帧。
+        同步接口：使用 Qwen3.5 Flash 模型快速扫描全帧。
         """
         try:
             if self.provider == "mock" or not settings.QWEN_API_KEY:
@@ -55,7 +55,7 @@ class AIAnalyzerService:
 
     async def _analyze_with_qwen_flash(self, frame: np.ndarray) -> List[Dict[str, Any]]:
         """
-        使用 Qwen3-VL Flash 模型进行快速缺陷初筛。
+        使用 Qwen3.5 Flash 模型进行快速缺陷初筛。
         """
         # 1. 编码图像
         _, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
@@ -79,7 +79,7 @@ class AIAnalyzerService:
         )
 
         payload = {
-            "model": settings.QWEN_FLASH_MODEL,
+            "model": settings.PRIMARY_MODEL,
             "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": system_prompt},
@@ -128,7 +128,7 @@ class AIAnalyzerService:
 
     def analyze_with_plus(self, roi_crop: np.ndarray) -> List[Dict[str, Any]]:
         """
-        同步接口：使用 Qwen3-VL Plus 模型对裁剪区域进行精确验证。
+        同步接口：使用 Qwen3.5 Plus 模型对裁剪区域进行精确验证。
         """
         try:
             if self.provider == "mock" or not settings.QWEN_API_KEY:
@@ -145,7 +145,7 @@ class AIAnalyzerService:
 
     async def _analyze_with_qwen_plus(self, roi_crop: np.ndarray) -> List[Dict[str, Any]]:
         """
-        使用 Qwen3-VL Plus 模型对裁剪区域进行精确缺陷验证。
+        使用 Qwen3.5 Plus 模型对裁剪区域进行精确缺陷验证。
         """
         # 1. 编码图像
         _, buffer = cv2.imencode(".jpg", roi_crop, [cv2.IMWRITE_JPEG_QUALITY, 80])
@@ -171,7 +171,7 @@ class AIAnalyzerService:
         )
 
         payload = {
-            "model": settings.QWEN_PLUS_MODEL,
+            "model": settings.SECONDARY_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {

@@ -29,21 +29,35 @@ class Settings(BaseSettings):
     CAMERA_FPS: int = 30
     
     # AI分析配置
+    AI_PROVIDER: str = "cascade"  # 可选: mock, kimi, qwen, cascade
+    AI_API_KEY: str = ""
+    AI_API_BASE_URL: str = "https://api.moonshot.cn/v1"
+    AI_MODEL: str = "moonshot-v1-8k"
+    ANALYSIS_INTERVAL: float = 2.0  # 提高检测频率
+
+    CAMERA_TYPE: str = "opencv"  # 可选: opencv, mvs, mock
+    CAMERA_ID: int = 0
+    CAMERA_WIDTH: int = 1280
+    CAMERA_HEIGHT: int = 720
+    CAMERA_FPS: int = 30
+    
+    # AI分析配置
     AI_PROVIDER: str = "mock"  # 可选: mock, kimi, qwen, cascade
     AI_API_KEY: str = ""
     AI_API_BASE_URL: str = "https://api.moonshot.cn/v1"
     AI_MODEL: str = "moonshot-v1-8k"
     ANALYSIS_INTERVAL: float = 5.0  # 每5秒分析1帧，降低服务器负载
 
-    # Qwen3-VL 级联检测配置
-    QWEN_API_BASE_URL: str = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    # Qwen3.5 级联检测配置 (PRIMARY_MODEL, SECONDARY_MODEL)
+    QWEN_API_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     QWEN_API_KEY: str = ""  # DashScope API Key
-    QWEN_FLASH_MODEL: str = "qwen-vl-max-latest"
-    QWEN_PLUS_MODEL: str = "qwen-vl-plus-latest"
+    PRIMARY_MODEL: str = "qwen3.5-flash"
+    SECONDARY_MODEL: str = "qwen3.5-plus"
+    ENABLE_SECONDARY: bool = True
 
     # 级联检测阈值
-    CASCADE_FLASH_THRESHOLD: float = 0.4  # Flash 初筛阈值
-    CASCADE_PLUS_THRESHOLD: float = 0.85  # Plus 确认阈值
+    FLASH_THRESHOLD: float = 0.4  # Flash 初筛阈值
+    SKIP_VERIFY_THRESHOLD: float = 0.8  # 超过此值则认为初扫已足够准确，跳过复核
 
     # 去重与缓冲
     DEDUP_IOU_THRESHOLD: float = 0.5  # IoU 空间去重阈值
