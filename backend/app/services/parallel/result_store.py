@@ -20,6 +20,16 @@ from app.services.parallel.types import (
 )
 
 
+def _default_dict():
+    """创建默认字典"""
+    return defaultdict(list)
+
+
+def _default_stats():
+    """创建默认统计信息"""
+    return ParallelDetectionStats(roll_id=0)
+
+
 @dataclass
 class ResultStore:
     """
@@ -32,10 +42,10 @@ class ResultStore:
     start_time: float = field(default_factory=time.time)
     
     # YOLO 结果缓存 (frame_index -> List[DetectionResult])
-    _yolo_results: Dict[int, List[DetectionResult]] = field(default_factory=lambda: defaultdict(list))
+    _yolo_results: Dict[int, List[DetectionResult]] = field(default_factory=_default_dict)
     
     # VLM 结果缓存 (frame_index -> List[DetectionResult])
-    _vlm_results: Dict[int, List[DetectionResult]] = field(default_factory=lambda: defaultdict(list))
+    _vlm_results: Dict[int, List[DetectionResult]] = field(default_factory=_default_dict)
     
     # 核对结果缓存 (frame_index -> ReconciliationResult)
     _reconciliation_results: Dict[int, ReconciliationResult] = field(default_factory=dict)
@@ -44,7 +54,7 @@ class ResultStore:
     _training_samples: List[SampleForTraining] = field(default_factory=list)
     
     # 统计信息
-    _stats: ParallelDetectionStats = field(default_factory=lambda: ParallelDetectionStats(roll_id=0))
+    _stats: ParallelDetectionStats = field(default_factory=_default_stats)
     
     # 锁
     _lock: threading.Lock = field(default_factory=threading.Lock)
@@ -238,6 +248,11 @@ class ResultStore:
     def get_summary(self) -> dict:
         """获取结果摘要"""
         with self._lock:
+            # 直接计算确认的缺陷数量，避免死锁
+            confirmed_count = sum(
+                1 for r in self._reconciliation_results.values()
+                if r.is_confirmed
+            )
             return {
                 "roll_id": self.roll_id,
                 "yolo_frames": len(self._yolo_results),
@@ -245,6 +260,6 @@ class ResultStore:
                 "vlm_samples": len(self._vlm_results),
                 "vlm_detections": self._stats.vlm_detections,
                 "reconciled": len(self._reconciliation_results),
-                "confirmed_defects": len(self.get_confirmed_defects()),
+                "confirmed_defects": confirmed_count,
                 "training_samples": len(self._training_samples),
             }
