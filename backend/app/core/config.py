@@ -67,6 +67,23 @@ class Settings(BaseSettings):
     # 级联队列
     VERIFICATION_QUEUE_SIZE: int = 50  # Plus 验证队列大小
     PENDING_DEFECT_TTL: float = 30.0  # PendingDefect 超时（秒）
+    
+    # ==================== Parallel 并行检测配置 ====================
+    # YOLO 配置
+    YOLO_MODEL_PATH: str = "models/yolov11s_fabric.pt"  # YOLO 模型路径
+    YOLO_CONFIDENCE: float = 0.5  # YOLO 检测置信度阈值
+    YOLO_SKIP_FRAMES: int = 0  # YOLO 跳帧数，0 表示每帧都检测
+    
+    # VLM 采样配置
+    VLM_SAMPLE_INTERVAL: int = 30  # VLM 采样间隔（帧数）
+    USE_ADAPTIVE_SAMPLING: bool = False  # 是否使用自适应采样
+    
+    # 交叉核对配置
+    RECONCILE_IOU_THRESHOLD: float = 0.3  # 核对匹配 IOU 阈值
+    RECONCILE_TIME_WINDOW: float = 2.0  # 核对时间窗口（秒）
+    
+    # 训练配置
+    TRAINING_MIN_SAMPLES: int = 50  # 触发训练最少样本数
 
     class Config:
         case_sensitive = True
