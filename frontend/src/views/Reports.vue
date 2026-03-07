@@ -83,7 +83,7 @@
               :disabled="generatingId === row.id"
               @click="handleDownloadReport(row)"
             >
-              下载报告
+              导出 PDF
             </el-button>
           </template>
         </el-table-column>
@@ -117,11 +117,11 @@
       <template #footer>
         <el-button @click="viewDialogVisible = false">关闭</el-button>
         <el-button
-          v-if="currentReportData"
+          v-if="currentReportData && currentReportData.roll"
           type="primary"
-          @click="downloadHtmlReport(currentReportData)"
+          @click="handleDownloadReport(currentReportData.roll)"
         >
-          下载HTML报告
+          下载 PDF
         </el-button>
       </template>
     </el-dialog>
@@ -134,6 +134,8 @@ import { ElMessage } from 'element-plus'
 import ReportViewer from '@/components/reports/ReportViewer.vue'
 import { getRollList } from '@/api/rolls'
 import { generateReport } from '@/api/reports'
+import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
 
 // 加载状态
 const loading = ref(false)
@@ -254,26 +256,28 @@ async function handleViewReport(row) {
 }
 
 /**
- * 直接下载报告（先生成再下载）
+ * 直接下载报告为 PDF（调用后端接口）
  * @param {Object} row - 布卷行数据
  */
-async function handleDownloadReport(row) {
-  generatingId.value = row.id
-  try {
-    let data = reportCache[row.id]
-    if (!data) {
-      data = await generateReport(row.id)
-      reportCache[row.id] = data
-    }
-    downloadHtmlReport(data)
-    ElMessage.success('报告下载已开始')
-  } catch (error) {
-    console.error('下载报告失败:', error)
-    ElMessage.error('报告下载失败，请稍后重试')
-  } finally {
-    generatingId.value = null
-  }
+// 处理"下载"报告按钮点击事件
+const handleDownloadReport = (row) => {
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  // 修改为直接打开后端的 PDF 下载接口，增加时间戳防止浏览器缓存
+  // 修正 API 路径，去除不存在的 /v1
+  const pdfUrl = `${apiUrl}/api/rolls/${row.id}/report/pdf?t=${Date.now()}`
+  
+  // 提示用户正在下载
+  ElMessage.success(`开始下载 ${row.roll_number} 的验布报告...`)
+  
+  // 使用隐藏的 <a> 标签触发下载
+  const a = document.createElement('a')
+  a.href = pdfUrl
+  a.setAttribute('download', '') // 尝试触发下载而非在当前页面打开
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
 }
+
 
 /**
  * 生成并下载自包含 HTML 报告文件
@@ -299,6 +303,15 @@ function downloadHtmlReport(reportData) {
   const qualityScore = summary.quality_score ?? 0
   const scoreColor = qualityScore >= 90 ? '#22c55e' : qualityScore >= 70 ? '#f59e0b' : '#ef4444'
 
+  const fourPoint = summary.four_point
+  let fourPointColor = '#94a3b8'
+  if (fourPoint) {
+    if (fourPoint.points_per_100sqyd <= 20) fourPointColor = '#22c55e'
+    else if (fourPoint.points_per_100sqyd <= 28) fourPointColor = '#3b82f6'
+    else if (fourPoint.points_per_100sqyd <= 40) fourPointColor = '#f59e0b'
+    else fourPointColor = '#ef4444'
+  }
+
   // 构建缺陷类型分布行
   const byTypeRows = (summary.by_type || [])
     .map(
@@ -317,34 +330,29 @@ function downloadHtmlReport(reportData) {
       (d, idx) => `
       <tr>
         <td>${idx + 1}</td>
-        <td>${defectTypeMap[d.defect_type] || d.defect_type}</td>
-        <td class="severity-${d.severity}">${severityMap[d.severity] || d.severity}</td>
+        <td>${defectTypeMap[d.defect_type] || d.defect_type || '-'}</td>
+        <td class="severity-${d.severity}">${severityMap[d.severity] || d.severity || '-'}</td>
         <td>${((d.confidence || 0) * 100).toFixed(1)}%</td>
-        <td>${d.bbox_x1 != null ? `(${d.bbox_x1}, ${d.bbox_y1})` : '-'}</td>
+        <td>${d.defect_length_cm != null ? `${d.defect_length_cm.toFixed(1)} cm` : '-'}</td>
+        <td class="score-text score-${d.point_score}">${d.point_score != null ? `${d.point_score} 分` : '-'}</td>
+        <td>${d.position_meter != null ? `${d.position_meter.toFixed(2)} 米` : '-'}</td>
       </tr>`
     )
     .join('')
 
-  const html = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>验布报告 - ${roll.roll_number || '-'}</title>
+  const htmlContent = `
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
+    .pdf-container {
       font-family: 'PingFang SC', 'Microsoft YaHei', '微软雅黑', sans-serif;
-      background: #f5f7fa;
+      background: #fff;
       color: #1a202c;
-      padding: 40px 20px;
+      padding: 40px;
+      width: 900px;
     }
     .report-wrap {
-      max-width: 900px;
-      margin: 0 auto;
+      width: 100%;
       background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 4px 24px rgba(0,0,0,.08);
       overflow: hidden;
     }
     /* 头部 */
@@ -355,6 +363,7 @@ function downloadHtmlReport(reportData) {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
+      border-radius: 8px 8px 0 0;
     }
     .brand { font-size: 28px; font-weight: 800; letter-spacing: 2px; }
     .brand span { color: #93c5fd; }
@@ -433,6 +442,11 @@ function downloadHtmlReport(reportData) {
     .severity-severe { color: #ef4444; font-weight: 600; }
     .severity-moderate { color: #f59e0b; font-weight: 600; }
     .severity-minor { color: #6b7280; }
+    .score-text { font-weight: 600; text-align: center; }
+    .score-1 { color: #64748b; }
+    .score-2 { color: #f59e0b; }
+    .score-3 { color: #ef4444; }
+    .score-4 { color: #b91c1c; }
     /* 页脚 */
     .report-footer {
       background: #f0f4ff;
@@ -442,14 +456,10 @@ function downloadHtmlReport(reportData) {
       font-size: 12px;
       color: #94a3b8;
       border-top: 1px solid #e2e8f0;
-    }
-    @media print {
-      body { background: #fff; padding: 0; }
-      .report-wrap { box-shadow: none; border-radius: 0; }
+      border-radius: 0 0 8px 8px;
     }
   </style>
-</head>
-<body>
+  <div class="pdf-container">
   <div class="report-wrap">
     <!-- 报告头部 -->
     <div class="report-header">
@@ -486,6 +496,10 @@ function downloadHtmlReport(reportData) {
             <div class="info-value">${roll.length_meters ?? '-'}</div>
           </div>
           <div class="info-item">
+            <div class="info-label">布幅（厘米）</div>
+            <div class="info-value">${roll.width_cm ?? '-'}</div>
+          </div>
+          <div class="info-item">
             <div class="info-label">布卷状态</div>
             <div class="info-value">已完成</div>
           </div>
@@ -496,21 +510,32 @@ function downloadHtmlReport(reportData) {
         </div>
       </div>
 
-      <!-- 质量评分 -->
-      <div class="section">
-        <div class="section-title">质量评分</div>
-        <div class="score-section">
-          <div class="score-ring">
-            <div class="score-number">${qualityScore}</div>
+      <!-- 四分制评分 -->
+      ${
+        fourPoint
+          ? `<div class="section">
+        <div class="section-title">四分制评分 (ASTM D5430)</div>
+        <div class="score-section" style="background:#fdf6ec; border:1px solid #faecd8;">
+          <div class="score-ring" style="border-color:${fourPointColor}">
+            <div class="score-number" style="color:${fourPointColor}">${fourPoint.points_per_100sqyd}</div>
           </div>
           <div>
-            <div class="score-label">综合质量评分</div>
-            <div class="score-desc">
-              ${qualityScore >= 90 ? '✅ 优质 — 布卷质量优秀，缺陷极少' : qualityScore >= 70 ? '⚠️ 良好 — 存在少量缺陷，可接受范围内' : '❌ 不合格 — 缺陷较多，建议进一步检查'}
+            <div class="score-label" style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:16px; font-weight:bold; color:#1e3a5f;">${fourPoint.grade}</span>
+              <span style="color:${fourPoint.is_pass ? '#22c55e' : '#ef4444'}; font-weight:bold;">
+                ${fourPoint.is_pass ? '合格' : '不合格'} (及格线: ${fourPoint.pass_threshold})
+              </span>
+            </div>
+            <div class="score-desc" style="margin-top:6px;">
+              总罚分: <strong>${fourPoint.total_points}</strong> 分。分布: [1分: ${fourPoint.score_distribution?.['1分']||0}, 2分: ${fourPoint.score_distribution?.['2分']||0}, 3分: ${fourPoint.score_distribution?.['3分']||0}, 4分: ${fourPoint.score_distribution?.['4分']||0}]
             </div>
           </div>
         </div>
-      </div>
+      </div>`
+          : ''
+      }
+
+
 
       <!-- 缺陷统计 -->
       <div class="section">
@@ -557,7 +582,7 @@ function downloadHtmlReport(reportData) {
         <div class="section-title">缺陷详情列表</div>
         <table>
           <thead>
-            <tr><th>#</th><th>缺陷类型</th><th>严重程度</th><th>置信度</th><th>坐标位置</th></tr>
+            <tr><th>#</th><th>缺陷类型</th><th>严重程度</th><th>置信度</th><th>缺陷长度</th><th>评分</th><th>位置(距卷首)</th></tr>
           </thead>
           <tbody>${defectRows}</tbody>
         </table>
@@ -575,20 +600,66 @@ function downloadHtmlReport(reportData) {
       <span>生成时间：${generatedAt}</span>
     </div>
   </div>
-</body>
-</html>`
+  </div>
+  `;
 
-  // 触发下载
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  const dateStr = new Date().toISOString().slice(0, 10)
-  link.href = url
-  link.download = `验布报告-${roll.roll_number || 'unknown'}-${dateStr}.html`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
+  // 重新构建给 html2pdf 解析使用的完整 DOM 树，且赋予固定宽度防止其截图时塌陷导致只有 3KB 乱码
+  const container = document.createElement('div');
+  container.innerHTML = htmlContent;
+  container.style.width = '900px'; 
+  container.style.padding = '20px';
+  container.style.backgroundColor = '#fff';
+  
+  // 关键修复：必须挂载到 DOM 树中并且脱离视口，html2canvas 才能计算样式并截图
+  container.style.position = 'fixed';
+  container.style.left = '-9999px';
+  document.body.appendChild(container);
+
+  const reportName = `验布报告-${roll.roll_number || 'unknown'}-${new Date().toISOString().slice(0, 10)}.pdf`;
+  ElMessage.info('正在提取数据层生成 PDF，请稍等...');
+  
+  // 通过其底层的 html2canvas 渲染 dom 到图像，然后由 jsPDF 封包为干净的 PDF，这是最彻底能修复名字及大小畸变的方法
+  html2canvas(container, {
+    scale: 2, 
+    useCORS: true, 
+    logging: false,
+    backgroundColor: '#ffffff'
+  }).then((canvas) => {
+    // 换取渲染后的高画质 base64 图像
+    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+    
+    // a4纸张的长宽计算 (单位mm)
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    
+    // 在生成的 PDF 中将图片贴上去
+    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+    
+    // 强制获取二进制文件流
+    const pdfBlob = pdf.output('blob');
+    
+    // 使用原生的 URL Object 与 <a> 标签指定下载名字并模拟点击
+    const url = URL.createObjectURL(pdfBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = reportName; // 强制赋予真实的系统级文件名
+    document.body.appendChild(link);
+    link.click();
+    
+    // 清理创建的资源
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    ElMessage.success('PDF 现已下发保存！');
+    document.body.removeChild(container);
+  }).catch((err) => {
+    console.error('PDF生成失败:', err);
+    ElMessage.error('转换 PDF 失败');
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
+  });
 }
 
 /**

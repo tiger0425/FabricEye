@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from datetime import datetime
 from enum import Enum
-from sqlalchemy import String, Float, DateTime, Enum as SQLEnum, JSON, Index
+from sqlalchemy import String, Float, Integer, DateTime, Enum as SQLEnum, JSON, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
@@ -31,6 +31,7 @@ class Roll(Base):
     fabric_type: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="面料类型")
     batch_number: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="批次号")
     length_meters: Mapped[float | None] = mapped_column(Float, nullable=True, comment="布卷长度（米）")
+    width_cm: Mapped[float | None] = mapped_column(Float, nullable=True, comment="布幅宽度（厘米）")
 
     status: Mapped[RollStatus] = mapped_column(
         SQLEnum(RollStatus, native_enum=False),
@@ -58,7 +59,12 @@ class Roll(Base):
     # ERP 关联字段
     erp_id: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="ERP 系统关联 ID")
     erp_sync_status: Mapped[str | None] = mapped_column(String(20), default="pending", nullable=True, comment="ERP 同步状态")
-    
+
+    # 四分制评分结果
+    total_points: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="四分制总罚分")
+    points_per_100sqyd: Mapped[float | None] = mapped_column(Float, nullable=True, comment="每百平方码罚分")
+    grade: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="质量等级")
+
     videos: Mapped[list["Video"]] = relationship("Video", back_populates="roll", cascade="all, delete-orphan")
     defects: Mapped[list["Defect"]] = relationship("Defect", back_populates="roll", cascade="all, delete-orphan")
 

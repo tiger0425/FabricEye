@@ -9,7 +9,7 @@ FabricEye AI验布系统 - 缺陷模型
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import String, Float, DateTime, ForeignKey, Boolean, Enum as SQLEnum, Index
+from sqlalchemy import String, Float, Integer, DateTime, ForeignKey, Boolean, Enum as SQLEnum, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -95,6 +95,10 @@ class Defect(Base):
         nullable=False,
         comment="严重程度"
     )
+
+    # 四分制评分相关
+    defect_length_cm: Mapped[float | None] = mapped_column(Float, nullable=True, comment="缺陷长度（厘米）")
+    point_score: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="四分制评分（1-4）")
 
     # 位置信息
     position_meter: Mapped[float | None] = mapped_column(Float, nullable=True, comment="位置（米）")

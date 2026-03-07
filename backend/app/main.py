@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+import os
 
 from app.core.config import settings
 from app.core.database import create_tables
@@ -32,6 +34,11 @@ app.include_router(defects.router, prefix=settings.API_V1_STR)
 app.include_router(videos.router, prefix=settings.API_V1_STR)
 # WebSocket 路由已在 websocket.py 中定义
 app.include_router(ws_router.router)
+
+# 挂载快照目录提供前端访问
+os.makedirs("snapshots", exist_ok=True)
+app.mount("/snapshots", StaticFiles(directory="snapshots"), name="snapshots")
+
 
 @app.get("/api/debug/config", tags=["Debug"])
 async def get_debug_config():
